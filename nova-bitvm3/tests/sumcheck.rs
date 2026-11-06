@@ -2,12 +2,12 @@
 //! One round of Nova 0.76 Spartan, verified by independent Boolean arithmetic.
 use ff::{Field, PrimeField};
 use garbled_snark_verifier::{
-    CircuitContext, WireId, circuit::{CircuitBuilder, CircuitInput, EncodeInput,
+    CircuitContext, WireId, circuit::{CircuitBuilder, CircuitInput, CircuitMode, EncodeInput,
         ExecuteMode, StreamingResult},
     nova::{PastaField, Word, sumcheck, transcript::Transcript},
 };
 use nova_snark::{
-    provider::{PallasEngine, VestaEngine, keccak::Keccak256Transcript},
+    provider::{PallasEngine, VestaEngine},
     spartan::{sumcheck::SumcheckProof, polys::univariate::UniPoly},
     traits::{Engine, TranscriptEngineTrait, TranscriptReprTrait},
 };
@@ -55,7 +55,7 @@ fn native<E:Engine>(degree:usize,high:bool)->Vec<u8>{
     if degree==3 {coefficients.push(E::Scalar::from(4u64));}
     let poly=UniPoly::<E::Scalar>::from_coeffs(coefficients.clone()).unwrap();
     let claim=poly.eval_at_zero()+poly.eval_at_one();
-    let mut transcript=Keccak256Transcript::<E>::new(b"nova-bitvm3-m6");
+    let mut transcript=E::TE::new(b"nova-bitvm3-m6");
     let proof=SumcheckProof::<E>::new(vec![poly.compress()]);
     let (next,challenge)=proof.verify(claim,1,degree,&mut transcript).unwrap();
     assert_eq!(challenge.len(),1);

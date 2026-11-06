@@ -3,9 +3,10 @@
 //! evaluation checks, Spartan matrices, commitment openings and more.
 use super::{
     CircuitContext, PastaField, WireId, Word, add_mod, and, canonical,
-    double_mod, equal, transcript::Transcript,
+    curve::{difference, product},
+    double_mod, equal,
+    transcript::Transcript,
 };
-use super::curve::{difference, product};
 
 /// compressed = [a0,a2] (quadratic) or [a0,a2,a3] (cubic).
 /// The verifier owns the number of coefficients, domain and challenge schedule.
