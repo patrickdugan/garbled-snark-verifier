@@ -37,12 +37,19 @@ jobs:
           cargo +1.90.0 generate-lockfile --manifest-path nova-bitvm3/Cargo.toml
           cargo +1.90.0 tree --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference > nova-bitvm3/results/dependencies.txt
           find "$HOME/.cargo/registry/src" -path '*/nova-snark-0.76.0/src/provider/keccak.rs' -exec cp {} nova-bitvm3/results/pinned-nova-keccak.rs \;
+          find "$HOME/.cargo/registry/src" -path '*/nova-snark-0.76.0/src/spartan/sumcheck.rs' -exec cp {} nova-bitvm3/results/pinned-nova-sumcheck.rs \;
+          find "$HOME/.cargo/registry/src" -path '*/nova-snark-0.76.0/src/spartan/snark.rs' -exec cp {} nova-bitvm3/results/pinned-nova-spartan.rs \;
+          find "$HOME/.cargo/registry/src" -path '*/nova-snark-0.76.0/src/spartan/polys/univariate.rs' -exec cp {} nova-bitvm3/results/pinned-nova-univariate.rs \;
       - name: Execute and garble/evaluate Pasta kernels
         run: |
           set -o pipefail
           /usr/bin/time -v -o nova-bitvm3/results/kernels-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --lib -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/kernels.txt
       - name: Build independent curve and transcript tests
-        run: cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript --test boolean_transcript --test structured_transcript --test sumcheck --no-run
+        run: cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript --test boolean_transcript --test structured_transcript --test sumcheck --test spartan_chain --no-run
+      - name: Multi-round chain and outer algebra conformance
+        run: |
+          set -o pipefail
+          /usr/bin/time -v -o nova-bitvm3/results/m78-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test spartan_chain -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m78.txt
       - name: Complete curve and exact transcript conformance
         run: |
           set -o pipefail

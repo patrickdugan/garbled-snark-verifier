@@ -8,6 +8,8 @@ use super::{
     transcript::Transcript,
 };
 
+pub mod chain;
+
 /// compressed = [a0,a2] (quadratic) or [a0,a2,a3] (cubic).
 /// The verifier owns the number of coefficients, domain and challenge schedule.
 /// The caller must conjoin this returned gate into final proof acceptance.
