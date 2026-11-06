@@ -35,7 +35,7 @@ impl EncodeInput<ExecuteMode> for Plain{
 fn build<C:CircuitContext>(c:&mut C,kind:Kind,w:&[WireId])->WireId{
     assert_eq!(w.len(),kind.width());
     let claim:Word=w[..256].try_into().unwrap();
-    let coeffs:Vec<Word>=(0..kind.degree-1).map(|i|{
+    let coeffs:Vec<Word>=(0..kind.degree).map(|i|{
         let j=(i+1)*256;w[j..j+256].try_into().unwrap()
     }).collect();
     let next:Word=w[w.len()-256..].try_into().unwrap();
