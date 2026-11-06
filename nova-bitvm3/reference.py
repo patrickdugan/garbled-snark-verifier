@@ -111,6 +111,13 @@ class KernelTests(unittest.TestCase):
                 self.assertFalse(predicate(a,b,(z+1)%p,p,True))
             for v in ((p,0,0),(0,p,0),(0,0,p),(0,1<<255,0)):
                 self.assertFalse(predicate(*v,p,True))
+    def test_bit_254_is_valid(self):
+        for p in (P, Q):
+            a, b = p - 1, 1 << 254
+            self.assertLess(b, p)
+            self.assertTrue(predicate(a, b, (a * b) % p, p, True))
+            self.assertFalse(predicate(a, b, ((a * b) + 1) % p, p, True))
+
     def test_radix4_random_full_width(self):
         r = random.Random(20261106)
         for p in (P, Q):

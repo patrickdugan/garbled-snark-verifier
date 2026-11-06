@@ -91,7 +91,7 @@ mod tests {
             }
             // Both high nonzero digit and boundary reducers must be exercised.
             let a = &p - 1u8;
-            for b in [BigUint::from(1u8) << 253, &p - 1u8, &p - 2u8] {
+            for b in [BigUint::from(1u8) << 254, BigUint::from(1u8) << 253, &p - 1u8, &p - 2u8] {
                 let z = (&a * &b) % &p;
                 assert!(execute(f, true, &a, &b, &z));
             }

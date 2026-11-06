@@ -6,11 +6,11 @@ cost of Pasta field multiplication while keeping canonical admission strict.
 ## Construction
 
 Both Pasta moduli have the form p = 2^254 + c and are below 2^255. For canonical
-a and b, the two most significant bits of b are zero. Write b in 127 radix-4
-digits d_i, each taken from two adjacent bits of the 254-bit multiplier.
+a and b, the highest bit of b (bit 255) is zero. Write b in 128 radix-4
+digits d_i, each taken from two adjacent bits of the 256-bit multiplier.
 
 Precompute A_0=0, A_1=a, A_2=2a mod p and A_3=3a mod p. Start with
-x=A_{d_126}; for descending digits set x=(4x + A_{d_i}) mod p. Every step
+x=A_{d_127}; for descending digits set x=(4x + A_{d_i}) mod p. Every step
 performs two fixed-modulus doublings, a Boolean 2-bit digit selection, then a
 modular addition. The first digit is selected directly. Since each intermediate
 is canonical and p < 2^255, doubling fits within 256 bits and requires at
@@ -58,3 +58,13 @@ are deterministic for conformance and are unsuitable for production garbling.
 Next: optimized Pallas/Vesta group operations, full Fiat-Shamir transcript
 reproduction, Spartan verification, IPA openings, and BitVM3 label/transaction
 binding. Preserve a transparent proving and compression path.
+
+## M2 CI diagnosis and correction
+
+The initial M2 GitHub Actions run 42136529496 passed the Python mirror but
+failed Rust tests on valid high-limb multipliers. The first Rust implementation
+incorrectly skipped bit 254. Pasta moduli exceed 2^254, so canonical elements
+can set this bit. The Python mirror used all 128 radix-4 digits and was correct.
+Rust now selects bits 254/255 in the initial digit and processes the remaining
+127 digit pairs. Explicit bit-254 boundary tests were added. Subsequent CI
+must establish the corrected kernel's results.

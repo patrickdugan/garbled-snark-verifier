@@ -231,8 +231,8 @@ fn select_digit<C: CircuitContext>(
 /// True iff canonical a,b,z satisfy z = a*b mod p.
 ///
 /// Radix-4 Horner: precompute {0,a,2a,3a}, then process two multiplier bits
-/// per round. The top two bits of a canonical Pasta value are zero, so
-/// digits cover bits 0..253. Every digit and round has identical topology.
+/// per round. Bit 255 is zero for canonical Pasta values; bit 254 may be one, so
+/// all 128 radix-4 digits cover bits 0..255. Every round has identical topology.
 pub fn check_mul<C: CircuitContext>(
     c: &mut C,
     field: PastaField,
@@ -243,8 +243,8 @@ pub fn check_mul<C: CircuitContext>(
     let valid = admitted(c, field, a, b, z);
     let two = double_mod(c, field, a);
     let three = add_mod(c, field, &two, a);
-    let mut acc = select_digit(c, b[252], b[253], a, &two, &three);
-    for i in (0..252).step_by(2).rev() {
+    let mut acc = select_digit(c, b[254], b[255], a, &two, &three);
+    for i in (0..254).step_by(2).rev() {
         acc = double_mod(c, field, &acc);
         acc = double_mod(c, field, &acc);
         let digit = select_digit(c, b[i], b[i + 1], a, &two, &three);
