@@ -34,7 +34,7 @@ struct Point {
 }
 
 fn point<A: CurveAffine>(p: A) -> Point {
-    match Option::from(p.coordinates()) {
+    match Option::<halo2curves::Coordinates<A>>::from(p.coordinates()) {
         Some(coords) => Point {
             x: BigUint::from_bytes_le(coords.x().to_repr().as_ref()),
             y: BigUint::from_bytes_le(coords.y().to_repr().as_ref()),

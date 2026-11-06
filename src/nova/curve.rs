@@ -183,7 +183,14 @@ pub fn check_add<C: CircuitContext>(
     let r_finite = not(c, r.infinity);
     let regular_valid = all(
         c,
-        &[regular, den_nonzero, slope_valid, x_valid, y_valid, r_finite],
+        &[
+            regular,
+            den_nonzero,
+            slope_valid,
+            x_valid,
+            y_valid,
+            r_finite,
+        ],
     );
     let inverse_valid = all(c, &[inverse, r.infinity, slope_zero]);
     let finite_case = or(c, regular_valid, inverse_valid);
