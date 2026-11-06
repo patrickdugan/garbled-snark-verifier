@@ -1,7 +1,8 @@
 name: Nova BitVM3 kernels and native reference
 on:
   push:
-    branches: ['feat/nova-bitvm3-*']
+    branches: ['main', 'feat/nova-bitvm3-*']
+    paths: ['src/nova.rs', 'nova-bitvm3/**', 'docs/nova-bitvm3*', '.github/workflows/nova-bitvm3.yml']
   pull_request:
     paths: ['src/nova.rs', 'src/lib.rs', 'nova-bitvm3/**', 'Cargo.toml', 'build.rs', '.github/workflows/nova-bitvm3.yml']
   workflow_dispatch:

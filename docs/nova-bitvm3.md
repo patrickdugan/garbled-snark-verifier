@@ -66,6 +66,14 @@ cargo test --release --manifest-path nova-bitvm3/Cargo.toml --lib -- --nocapture
 cargo run --release --manifest-path nova-bitvm3/Cargo.toml --features native-reference --bin nova-reference -- results/nova-reference
 ```
 
+## M2: radix-4 Boolean multiplication
+
+The next milestone uses a fixed-topology radix-4 Horner multiplier with
+precomputed 2a and 3a and a constant-modulus borrow recurrence. It reuses
+the same field encoding and validator. The Python mirror tests an exhaustive
+set of small fields and random full-width cases; Rust conformance and updated
+gate counts run in the dedicated CI workflow. [Engineering details](nova-bitvm3-m2-radix4.md).
+
 ## Next milestone
 
 1. Import complete Pallas/Vesta point arithmetic from the tested reference

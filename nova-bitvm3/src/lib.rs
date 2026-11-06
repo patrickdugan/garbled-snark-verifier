@@ -75,6 +75,29 @@ mod tests {
         }
     }
 
+    #[test]
+    fn randomized_radix4_mul_matches_biguint() {
+        let mut rng = ChaChaRng::seed_from_u64(20261106);
+        for f in [PastaField::PallasBase, PastaField::VestaBase] {
+            let p = modulus(f);
+            for _ in 0..24 {
+                let mut bytes = [0u8; 64];
+                rng.fill_bytes(&mut bytes);
+                let a = BigUint::from_bytes_le(&bytes[..32]) % &p;
+                let b = BigUint::from_bytes_le(&bytes[32..]) % &p;
+                let z = (&a * &b) % &p;
+                assert!(execute(f, true, &a, &b, &z));
+                assert!(!execute(f, true, &a, &b, &((&z + 1u8) % &p)));
+            }
+            // Both high nonzero digit and boundary reducers must be exercised.
+            let a = &p - 1u8;
+            for b in [BigUint::from(1u8) << 253, &p - 1u8, &p - 2u8] {
+                let z = (&a * &b) % &p;
+                assert!(execute(f, true, &a, &b, &z));
+            }
+        }
+    }
+
     // Inputs are allocated from the garbler's own delta and RNG.
     struct GarbleInput;
     impl CircuitInput for GarbleInput {

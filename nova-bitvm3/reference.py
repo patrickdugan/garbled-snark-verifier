@@ -14,9 +14,8 @@ def bits(x, n):
 def sub(a, b):
     out, borrow = [], 0
     for x, y in zip(a, b):
-        t = x ^ y
-        out.append(t ^ borrow)
-        borrow = ((1 ^ x) & y) ^ ((1 ^ t) & borrow)
+        out.append(x ^ y ^ borrow)
+        borrow = ((1 ^ x) | borrow) if y else ((1 ^ x) & borrow)
     return out, borrow
 
 def add(a, b, p):
@@ -28,15 +27,33 @@ def add(a, b, p):
     reduced, borrow = sub(out, p)
     return [r ^ (borrow & (r ^ s)) for r, s in zip(reduced, out)]
 
+def double(a, p):
+    shifted = [0] + a[:-1]
+    reduced, borrow = sub(shifted, p)
+    return [r ^ (borrow & (r ^ s)) for r, s in zip(reduced, shifted)]
+
+def select_digit(a, twice, thrice, b0, b1):
+    def mux(s, x, y):
+        return x ^ (s & (x ^ y))
+    return [
+        mux(b1, b0 & x, mux(b0, y, z))
+        for x, y, z in zip(a, twice, thrice)
+    ]
+
 def predicate(a, b, z, modulus, multiply=False, width=256):
     if any(type(x) is not int or x < 0 or x >= 1 << width for x in (a, b, z)):
         raise ValueError('input is not a fixed-width unsigned word')
     aa, bb, zz, pp = (bits(x, width) for x in (a, b, z, modulus))
     valid = sub(aa, pp)[1] & sub(bb, pp)[1] & sub(zz, pp)[1]
     if multiply:
-        result = [0] * width
-        for i in reversed(range(width - 1)):
-            result = add(add(result, result, pp), [x & bb[i] for x in aa], pp)
+        twice = double(aa, pp)
+        thrice = add(twice, aa, pp)
+        top = ((width - 2) // 2) * 2
+        result = select_digit(aa, twice, thrice, bb[top], bb[top + 1])
+        for i in range(top - 2, -1, -2):
+            result = double(double(result, pp), pp)
+            digit = select_digit(aa, twice, thrice, bb[i], bb[i + 1])
+            result = add(result, digit, pp)
     else:
         result = add(aa, bb, pp)
     eq = 1
@@ -55,6 +72,14 @@ class KernelTests(unittest.TestCase):
             for b in range(32):
                 for z in (0, 1, 12, 13, 31, (a*b)%13):
                     self.assertEqual(predicate(a,b,z,13,True,5), a<13 and b<13 and z<13 and z==(a*b)%13)
+    def test_radix4_exhaustive_small_fields(self):
+        for p, width in ((5, 4), (13, 5), (19, 6), (67, 8)):
+            for a in range(p):
+                for b in range(p):
+                    good = a * b % p
+                    self.assertTrue(predicate(a, b, good, p, True, width))
+                    self.assertFalse(predicate(a, b, (good + 1) % p, p, True, width))
+
     def test_full_width_edges(self):
         for p in (P,Q):
             for a,b in ((0,0),(p-1,1),(p-1,p-1),(1,1)):
@@ -86,6 +111,15 @@ class KernelTests(unittest.TestCase):
                 self.assertFalse(predicate(a,b,(z+1)%p,p,True))
             for v in ((p,0,0),(0,p,0),(0,0,p),(0,1<<255,0)):
                 self.assertFalse(predicate(*v,p,True))
+    def test_radix4_random_full_width(self):
+        r = random.Random(20261106)
+        for p in (P, Q):
+            for _ in range(32):
+                a, b = r.randrange(p), r.randrange(p)
+                z = a * b % p
+                self.assertTrue(predicate(a, b, z, p, True))
+                self.assertFalse(predicate(a, b, (z + 1) % p, p, True))
+
     def test_input_bounds(self):
         for bad in (-1,1<<256,True,1.5):
             with self.assertRaises(ValueError): predicate(bad,0,0,P)
