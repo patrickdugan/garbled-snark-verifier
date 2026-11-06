@@ -2,14 +2,15 @@
 #[cfg(test)]
 mod tests {
     use garbled_snark_verifier::{
-        AesCcrGateHasher, CircuitContext, EvaluatedWire, GarbledWire, GateHasher, S, WireId,
+        AesCcrGateHasher, Blake3AccumulatingHash, CircuitContext, EvaluatedWire, GarbledWire, GateHasher, S, WireId,
         circuit::{CircuitBuilder, CircuitInput, CircuitMode, EncodeInput, ExecuteMode,
-            GarbleMode, EvaluateMode, CiphertextHandler, CiphertextSource, StreamingResult},
+            GarbleMode, EvaluateMode, CiphertextHandler, CiphertextSource, FileSource, StreamingResult},
         nova::{self, PastaField, Word},
     };
     use num_bigint::BigUint;
     use rand::{RngCore, SeedableRng};
     use rand_chacha::ChaChaRng;
+    use std::io::{BufWriter, Write};
 
     const CAPACITY: usize = 32768; // allocator reservation, NOT an enforced RAM cap
     fn modulus(f: PastaField) -> BigUint {
@@ -134,6 +135,69 @@ mod tests {
         fn recv(&mut self) -> Option<S> { self.0.next() }
         fn finalize(mut self) { assert!(self.0.next().is_none(), "unconsumed ciphertexts"); }
     }
+    // Test-only bounded-buffer disk writer. The hash is recomputed while
+    // streaming, and compared to FileSource's evaluation-side digest.
+    struct DigestFileSink {
+        writer: BufWriter<std::fs::File>,
+        digest: Blake3AccumulatingHash,
+    }
+    impl CiphertextHandler for DigestFileSink {
+        type Result = [u8; 32];
+        fn handle(&mut self, ct: S) {
+            self.writer.write_all(&ct.to_bytes()).expect("write ciphertext");
+            self.digest.update(ct);
+        }
+        fn finalize(mut self) -> Self::Result {
+            self.writer.flush().expect("flush ciphertext");
+            self.digest.finalize()
+        }
+    }
+
+    #[test]
+    fn file_backed_garbling_replays_and_checks_digest() {
+        let field = PastaField::PallasBase;
+        let seed = 20261106u64; // reproducible tests only
+        let mut rng = ChaChaRng::seed_from_u64(seed);
+        let hasher = AesCcrGateHasher::from_rng(&mut rng);
+        let path = std::env::temp_dir().join(format!(
+            "nova-bitvm3-{}-{seed}.ciphertexts", std::process::id()
+        ));
+        let sink = DigestFileSink {
+            writer: BufWriter::with_capacity(
+                64 * 1024, std::fs::File::create(&path).expect("create ciphertext stream")
+            ),
+            digest: Blake3AccumulatingHash::default(),
+        };
+        let g: StreamingResult<GarbleMode<AesCcrGateHasher, DigestFileSink>, _, GarbledWire> =
+            CircuitBuilder::streaming_garbling(GarbleInput, CAPACITY, seed, sink,
+                |ctx, wires| circuit(ctx, field, true, wires));
+        let bytes = std::fs::metadata(&path).expect("ciphertext metadata").len();
+        assert!(bytes > 0 && bytes % 16 == 0);
+        let p = modulus(field);
+        let a = &p - 1u8;
+        let b = BigUint::from(1u8) << 254;
+        let z = (&a * &b) % &p;
+        let input = EvalInput(
+            g.input_wire_values.iter().zip(bits(&a, &b, &z))
+                .map(|(w, bit)| EvaluatedWire::new_from_garbled(w, bit))
+                .collect()
+        );
+        let evaluation: StreamingResult<EvaluateMode<AesCcrGateHasher, FileSource>, _, EvaluatedWire> =
+            CircuitBuilder::streaming_evaluation(
+                input,
+                CAPACITY,
+                g.true_wire_constant.label1.to_u128(),
+                g.false_wire_constant.label0.to_u128(),
+                hasher,
+                FileSource::from_path(&path).expect("open ciphertext stream"),
+                |ctx, wires| circuit(ctx, field, true, wires)
+            );
+        assert_eq!(evaluation.output_value.active_label, g.output_value.select(true));
+        assert_eq!(evaluation.ciphertext_handler_result, g.ciphertext_handler_result);
+        eprintln!("radix4_disk_ciphertext_bytes={bytes} digest_consistent=true");
+        std::fs::remove_file(&path).expect("remove ciphertext stream");
+    }
+
     #[test]
     fn garble_evaluate_matches_execute() {
         for (f, multiply) in [(PastaField::PallasBase, false), (PastaField::VestaBase, false),

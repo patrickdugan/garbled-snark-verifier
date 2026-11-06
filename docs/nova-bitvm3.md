@@ -68,6 +68,11 @@ cargo run --release --manifest-path nova-bitvm3/Cargo.toml --features native-ref
 
 ## M2: radix-4 Boolean multiplication
 
+CI now measures **360,963** non-free gates per multiplication, down from
+719,875, and **2,051** per addition, down from 3,075. See the
+[M2 evidence and streaming follow-up](nova-bitvm3-m2-radix4.md).
+
+
 The next milestone uses a fixed-topology radix-4 Horner multiplier with
 precomputed 2a and 3a and a constant-modulus borrow recurrence. It reuses
 the same field encoding and validator. The Python mirror tests an exhaustive

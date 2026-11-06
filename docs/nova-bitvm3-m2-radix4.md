@@ -68,3 +68,31 @@ can set this bit. The Python mirror used all 128 radix-4 digits and was correct.
 Rust now selects bits 254/255 in the initial digit and processes the remaining
 127 digit pairs. Explicit bit-254 boundary tests were added. Subsequent CI
 must establish the corrected kernel's results.
+
+## Verified M2 arithmetic result
+
+[GitHub Actions run 42136787286](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42136787286)
+passed on commit `deb7ff484c14ebd2fcc71a317d0722775d2d5379`.
+The runner completed **11 Python groups and 5 Rust groups**, including the
+canonical bit-254 multiplication regression and garble/evaluate parity.
+
+| Predicate | M1 non-free gates | M2 non-free gates | M1 ciphertext bytes | M2 ciphertext bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Addition, either field | 3,075 | 2,051 | 49,200 | 32,816 |
+| Multiplication, either field | 719,875 | 360,963 | 11,518,000 | 5,775,408 |
+
+Multiplication reduced non-free gates by 358,912 (49.8575%), and addition
+reduced them by 1,024 (33.3008%). The two fields have different AND/OR
+breakdowns but identical counts of non-free gates. Measurements are for one
+arithmetic predicate; the full IPA verifier has not been built.
+
+The native toy Nova proof again serialized to 10,592 bytes and verified with
+Spartan/IPA; complete native program runtime was 9.5809 seconds, excluding
+compilation. Its statement remained `square_plus_five_v1`, not a Bitcoin
+header-chain proof.
+
+[Original CI artifact](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42136787286/artifacts/13465602507)
+contains the proof and verifying key, dependency lockfile, traces and
+time/RSS records. Subsequent disk-backed stream tests use the same arithmetic
+circuit and compare ciphertext hashes; they do not constitute an enforced
+process memory limit.
