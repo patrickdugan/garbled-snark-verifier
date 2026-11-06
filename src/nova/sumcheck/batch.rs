@@ -5,8 +5,7 @@
 //! its commitment combination and IPA verification are still required.
 use super::{
     CircuitContext, PastaField, Transcript, WireId, Word, add_mod, and, canonical, chain,
-    difference, double_mod, equal, product,
-    r1cs::AlgebraPhase,
+    difference, double_mod, equal, product, r1cs::AlgebraPhase,
 };
 use crate::circuit::{FALSE_WIRE, TRUE_WIRE};
 
