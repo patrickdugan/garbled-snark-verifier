@@ -50,9 +50,9 @@ def plans(suite: str, output: Path) -> list[tuple[str, list[str], list[str]]]:
     flags = ['--features', FEATURES]
     targets = {
         'smoke': ['--lib'],
-        'transcript': ['--test', 'transcript', '--test', 'boolean_transcript'],
+        'transcript': ['--test', 'transcript', '--test', 'boolean_transcript', '--test', 'structured_transcript'],
         'curves': ['--test', 'curves'],
-        'all': ['--lib', '--test', 'curves', '--test', 'transcript', '--test', 'boolean_transcript'],
+        'all': ['--lib', '--test', 'curves', '--test', 'transcript', '--test', 'boolean_transcript', '--test', 'structured_transcript'],
     }
     if suite == 'native':
         target = ['--features', 'native-reference', '--bin', 'nova-reference']

@@ -254,6 +254,114 @@ impl Transcript {
         self.valid = and(c, self.valid, admitted);
         self.absorb_bytes(label, scalar);
     }
+    /// The transcript's scalar field and the commitment's curve must form
+    /// the declared Pasta cycle. This is a verifier-side configuration check.
+    fn require_curve(&self, curve: super::curve::PastaCurve) {
+        let scalar = match curve {
+            super::curve::PastaCurve::Pallas => PastaField::VestaBase,
+            super::curve::PastaCurve::Vesta => PastaField::PallasBase,
+        };
+        assert_eq!(self.field, scalar, "transcript engine/point curve mismatch");
+    }
+
+    /// Nova affine-coordinate transcript representation: x||y (64 bytes).
+    /// The identity is represented by (0,0), inferred from its coordinates.
+    /// The circuit validates canonicality and curve membership before use.
+    pub fn absorb_affine_encoded<C: CircuitContext>(
+        &mut self,
+        c: &mut C,
+        label: &[u8],
+        curve: super::curve::PastaCurve,
+        bytes: &[WireId; 512],
+    ) {
+        self.require_curve(curve);
+        let x: Word = bytes[..256].try_into().expect("affine x");
+        let y: Word = bytes[256..].try_into().expect("affine y");
+        let x_zero = equal(c, &x, &[FALSE_WIRE; 256]);
+        let y_zero = equal(c, &y, &[FALSE_WIRE; 256]);
+        let infinity = and(c, x_zero, y_zero);
+        let point = super::curve::AffinePoint { x, y, infinity };
+        let valid = super::curve::check_member(c, curve, &point);
+        self.valid = and(c, self.valid, valid);
+        self.absorb_bytes(label, bytes);
+    }
+
+    /// Nova Pedersen commitment transcript representation:
+    /// canonical x||y||is_infinity (65 bytes). The last byte is exactly
+    /// 0x00 or 0x01; nonzero reserved bits reject the entire transcript.
+    /// This consumes raw witness bits and preserves their exact byte value.
+    pub fn absorb_commitment_encoded<C: CircuitContext>(
+        &mut self,
+        c: &mut C,
+        label: &[u8],
+        curve: super::curve::PastaCurve,
+        bytes: &[WireId; 520],
+    ) {
+        self.require_curve(curve);
+        let point = super::curve::AffinePoint {
+            x: bytes[..256].try_into().expect("commitment x"),
+            y: bytes[256..512].try_into().expect("commitment y"),
+            infinity: bytes[512],
+        };
+        let member = super::curve::check_member(c, curve, &point);
+        let mut flag_valid = TRUE_WIRE;
+        for bit in &bytes[513..520] {
+            let is_zero = not(c, *bit);
+            flag_valid = and(c, flag_valid, is_zero);
+        }
+        let valid = and(c, member, flag_valid);
+        self.valid = and(c, self.valid, valid);
+        self.absorb_bytes(label, bytes);
+    }
+
+    /// A slice of scalars is absorbed with one label, as Nova's
+    /// TranscriptReprTrait implementation for &[T] does. Every scalar must
+    /// be canonical. The caller fixes the slice length in the circuit shape.
+    pub fn absorb_scalar_slice<C: CircuitContext>(
+        &mut self,
+        c: &mut C,
+        label: &[u8],
+        values: &[Word],
+    ) {
+        let mut encoded = Vec::with_capacity(values.len() * 256);
+        for value in values {
+            let valid = canonical(c, self.field, value);
+            self.valid = and(c, self.valid, valid);
+            encoded.extend_from_slice(value);
+        }
+        self.absorb_bytes(label, &encoded);
+    }
+
+    /// A slice of commitments uses one label and fixed 65-byte records.
+    /// The record count is verifier-owned; each flag and point is validated.
+    pub fn absorb_commitment_slice<C: CircuitContext>(
+        &mut self,
+        c: &mut C,
+        label: &[u8],
+        curve: super::curve::PastaCurve,
+        values: &[[WireId; 520]],
+    ) {
+        self.require_curve(curve);
+        let mut raw = Vec::with_capacity(values.len() * 520);
+        for value in values {
+            let point = super::curve::AffinePoint {
+                x: value[..256].try_into().expect("commitment x"),
+                y: value[256..512].try_into().expect("commitment y"),
+                infinity: value[512],
+            };
+            let member = super::curve::check_member(c, curve, &point);
+            let mut flag_valid = TRUE_WIRE;
+            for bit in &value[513..520] {
+                let b = not(c, *bit);
+                flag_valid = and(c, flag_valid, b);
+            }
+            let valid = and(c, member, flag_valid);
+            self.valid = and(c, self.valid, valid);
+            raw.extend_from_slice(value);
+        }
+        self.absorb_bytes(label, &raw);
+    }
+
     pub fn dom_sep(&mut self, label: &[u8]) {
         self.pending.extend(constants(b"NoDS"));
         self.pending.extend(constants(label));

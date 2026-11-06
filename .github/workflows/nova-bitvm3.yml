@@ -42,7 +42,7 @@ jobs:
           set -o pipefail
           /usr/bin/time -v -o nova-bitvm3/results/kernels-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --lib -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/kernels.txt
       - name: Build independent curve and transcript tests
-        run: cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript --test boolean_transcript --no-run
+        run: cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript --test boolean_transcript --test structured_transcript --no-run
       - name: Complete curve and exact transcript conformance
         run: |
           set -o pipefail
@@ -53,6 +53,10 @@ jobs:
           /usr/bin/time -v -o nova-bitvm3/results/m4-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test boolean_transcript -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m4.txt
       - name: Exercise local runner with real transcript tests
         run: python3 nova-bitvm3/local_run.py --suite transcript --jobs 2 --threads 2 --output nova-bitvm3/results/local-ci
+      - name: Structured affine and commitment conformance
+        run: |
+          set -o pipefail
+          /usr/bin/time -v -o nova-bitvm3/results/m5-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test structured_transcript -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m5.txt
       - name: Real Nova compressed proof reference
         run: |
           set -o pipefail

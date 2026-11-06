@@ -131,6 +131,17 @@ fn admit_point<C: CircuitContext>(c: &mut C, f: PastaField, p: &AffinePoint) -> 
     (all(c, &[cx, cy, member]), x2)
 }
 
+/// A fully checked Pasta point encoding, including canonical field elements,
+/// y^2 = x^3 + 5, and the unique (0,0,true) encoding of infinity.
+/// The point's curve is selected by the verifier and cannot be a witness value.
+pub fn check_member<C: CircuitContext>(
+    c: &mut C,
+    curve: PastaCurve,
+    point: &AffinePoint,
+) -> WireId {
+    admit_point(c, curve.base_field(), point).0
+}
+
 /// Accept exactly when P,Q,R are canonical points, R=P+Q, and the supplied
 /// slope is the unique affine slope (or zero for identity/inverse branches).
 /// Branches and both curve equations are enforced using Boolean wires.
