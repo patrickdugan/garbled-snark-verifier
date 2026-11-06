@@ -8,6 +8,7 @@ use super::{
     transcript::Transcript,
 };
 
+pub mod batch;
 pub mod chain;
 pub mod r1cs;
 
