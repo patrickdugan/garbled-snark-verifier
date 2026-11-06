@@ -2,12 +2,13 @@
 //!
 //! This phase binds the inner sumcheck to the R1CS matrices and to the public
 //! half of Z = [W, u, X, zero padding]. Commitment openings remain necessary.
+use std::collections::BTreeMap;
+
 use super::{
     CircuitContext, PastaField, Transcript, WireId, Word, add_mod, and, canonical, chain,
     difference, product,
 };
 use crate::circuit::{FALSE_WIRE, TRUE_WIRE};
-use std::collections::BTreeMap;
 
 /// A verifier-owned sparse matrix entry with a canonical little-endian scalar.
 #[derive(Clone, Debug)]
@@ -50,18 +51,34 @@ impl R1csShape {
         if public_inputs >= witness {
             return Err("public inputs and u exceed their half of Z");
         }
-        let prime: Vec<u8> = field.modulus_le().iter().flat_map(|v| v.to_le_bytes()).collect();
+        let prime: Vec<u8> = field
+            .modulus_le()
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
         for matrix in &matrices {
             for entry in matrix {
                 if entry.row >= rows || entry.column >= 2 * witness {
                     return Err("matrix index exceeds verifier dimensions");
                 }
-                if entry.coefficient.iter().rev().cmp(prime.iter().rev()).is_ge() {
+                if entry
+                    .coefficient
+                    .iter()
+                    .rev()
+                    .cmp(prime.iter().rev())
+                    .is_ge()
+                {
                     return Err("matrix coefficient is not canonical");
                 }
             }
         }
-        Ok(Self { field, row_bits, witness_bits, public_inputs, matrices })
+        Ok(Self {
+            field,
+            row_bits,
+            witness_bits,
+            public_inputs,
+            matrices,
+        })
     }
 
     fn evaluate<C: CircuitContext>(&self, c: &mut C, rx: &[Word], ry: &[Word]) -> [Word; 3] {
@@ -76,9 +93,15 @@ impl R1csShape {
                 if entry.coefficient == [0u8; 32] {
                     continue;
                 }
-                let row = *rows.entry(entry.row).or_insert_with(|| basis(c, self.field, entry.row, rx));
-                let column = *columns.entry(entry.column).or_insert_with(|| basis(c, self.field, entry.column, ry));
-                let weight = *cells.entry((entry.row, entry.column)).or_insert_with(|| product(c, self.field, &row, &column));
+                let row = *rows
+                    .entry(entry.row)
+                    .or_insert_with(|| basis(c, self.field, entry.row, rx));
+                let column = *columns
+                    .entry(entry.column)
+                    .or_insert_with(|| basis(c, self.field, entry.column, ry));
+                let weight = *cells
+                    .entry((entry.row, entry.column))
+                    .or_insert_with(|| product(c, self.field, &row, &column));
                 let coefficient = constant(&entry.coefficient);
                 let term = product(c, self.field, &weight, &coefficient);
                 sum = add_mod(c, self.field, &sum, &term);
@@ -90,7 +113,11 @@ impl R1csShape {
 
 fn constant(bytes: &[u8; 32]) -> Word {
     std::array::from_fn(|i| {
-        if (bytes[i / 8] >> (i % 8)) & 1 == 1 { TRUE_WIRE } else { FALSE_WIRE }
+        if (bytes[i / 8] >> (i % 8)) & 1 == 1 {
+            TRUE_WIRE
+        } else {
+            FALSE_WIRE
+        }
     })
 }
 
@@ -106,7 +133,11 @@ fn basis<C: CircuitContext>(c: &mut C, field: PastaField, index: usize, point: &
         } else {
             difference(c, field, &one, coordinate)
         };
-        result = if j == 0 { factor } else { product(c, field, &result, &factor) };
+        result = if j == 0 {
+            factor
+        } else {
+            product(c, field, &result, &factor)
+        };
     }
     result
 }
@@ -132,11 +163,21 @@ pub struct AlgebraPhase {
 }
 
 impl AlgebraPhase {
-    pub fn validity(&self) -> WireId { self.valid }
-    pub fn error_point(&self) -> &[Word] { &self.rx }
-    pub fn witness_point(&self) -> &[Word] { &self.ry[1..] }
-    pub fn witness_evaluation(&self) -> &Word { &self.eval_w }
-    pub fn error_evaluation(&self) -> &Word { &self.eval_e }
+    pub fn validity(&self) -> WireId {
+        self.valid
+    }
+    pub fn error_point(&self) -> &[Word] {
+        &self.rx
+    }
+    pub fn witness_point(&self) -> &[Word] {
+        &self.ry[1..]
+    }
+    pub fn witness_evaluation(&self) -> &Word {
+        &self.eval_w
+    }
+    pub fn error_evaluation(&self) -> &Word {
+        &self.eval_e
+    }
 }
 
 /// Execute the outer and inner algebra in one transcript and with shared wires.
@@ -154,20 +195,52 @@ pub fn verify_algebra<C: CircuitContext>(
     proof: &AlgebraProof,
 ) -> AlgebraPhase {
     assert_eq!(transcript.scalar_field(), shape.field, "R1CS scalar field");
-    assert_eq!(public_inputs.len(), shape.public_inputs, "R1CS public arity");
-    assert_eq!(proof.outer_rounds.len(), shape.row_bits, "outer round count");
-    assert_eq!(proof.inner_rounds.len(), shape.witness_bits + 1, "inner round count");
-    assert!(proof.outer_rounds.iter().all(|v| v.len() == 3), "outer polynomial shape");
-    assert!(proof.inner_rounds.iter().all(|v| v.len() == 2), "inner polynomial shape");
+    assert_eq!(
+        public_inputs.len(),
+        shape.public_inputs,
+        "R1CS public arity"
+    );
+    assert_eq!(
+        proof.outer_rounds.len(),
+        shape.row_bits,
+        "outer round count"
+    );
+    assert_eq!(
+        proof.inner_rounds.len(),
+        shape.witness_bits + 1,
+        "inner round count"
+    );
+    assert!(
+        proof.outer_rounds.iter().all(|v| v.len() == 3),
+        "outer polynomial shape"
+    );
+    assert!(
+        proof.inner_rounds.iter().all(|v| v.len() == 2),
+        "inner polynomial shape"
+    );
     let field = shape.field;
     let mut valid = canonical(c, field, &proof.eval_w);
     for value in public_inputs {
         let admitted = canonical(c, field, value);
         valid = and(c, valid, admitted);
     }
-    let outer = chain::outer_phase(c, transcript, &proof.outer_rounds, shape.row_bits, u, &proof.outer_claims);
+    let outer = chain::outer_phase(
+        c,
+        transcript,
+        &proof.outer_rounds,
+        shape.row_bits,
+        u,
+        &proof.outer_claims,
+    );
     valid = and(c, valid, outer.validity());
-    let inner = chain::reduce(c, transcript, outer.inner_claim(), &proof.inner_rounds, shape.witness_bits + 1, 2);
+    let inner = chain::reduce(
+        c,
+        transcript,
+        outer.inner_claim(),
+        &proof.inner_rounds,
+        shape.witness_bits + 1,
+        2,
+    );
     let ry = inner.challenges();
     let evaluations = shape.evaluate(c, outer.challenges(), ry);
 
