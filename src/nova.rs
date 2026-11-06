@@ -69,11 +69,7 @@ fn mux<C: CircuitContext>(c: &mut C, select_b: WireId, a: WireId, b: WireId) -> 
 }
 /// Subtract the selected field modulus. The modulus is a compile-time constant,
 /// so each borrow step uses one non-free gate instead of a generic full subtractor.
-fn sub_modulus<C: CircuitContext>(
-    c: &mut C,
-    field: PastaField,
-    x: &Word,
-) -> (Word, WireId) {
+fn sub_modulus<C: CircuitContext>(c: &mut C, field: PastaField, x: &Word) -> (Word, WireId) {
     let p = field.modulus_le();
     let mut borrow = FALSE_WIRE;
     let mut out = [FALSE_WIRE; 256];
@@ -171,15 +167,18 @@ fn double_mod<C: CircuitContext>(c: &mut C, field: PastaField, a: &Word) -> Word
         PastaField::PallasBase => 0u8,
         PastaField::VestaBase => 1,
     }];
-    let key = generate_component_key("nova.pasta.double.v1", [("field", tag.as_slice())], 256, 256);
+    let key = generate_component_key(
+        "nova.pasta.double.v1",
+        [("field", tag.as_slice())],
+        256,
+        256,
+    );
     let out: Vec<WireId> = c.with_named_child(
         key,
         a.to_vec(),
         |ctx, wires| {
             let x: Word = wires.as_slice().try_into().expect("fixed input arity");
-            let shifted: Word = std::array::from_fn(|i| {
-                if i == 0 { FALSE_WIRE } else { x[i - 1] }
-            });
+            let shifted: Word = std::array::from_fn(|i| if i == 0 { FALSE_WIRE } else { x[i - 1] });
             let (reduced, borrow) = sub_modulus(ctx, field, &shifted);
             (0..256)
                 .map(|i| mux(ctx, borrow, reduced[i], shifted[i]))
@@ -205,8 +204,13 @@ fn select_digit<C: CircuitContext>(
         256,
         770,
     );
-    let inputs: Vec<WireId> = a.iter().chain(two).chain(three)
-        .copied().chain([bit0, bit1]).collect();
+    let inputs: Vec<WireId> = a
+        .iter()
+        .chain(two)
+        .chain(three)
+        .copied()
+        .chain([bit0, bit1])
+        .collect();
     let out: Vec<WireId> = c.with_named_child(
         key,
         inputs,
