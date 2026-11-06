@@ -2,9 +2,9 @@ name: Nova BitVM3 kernels and native reference
 on:
   push:
     branches: ['main', 'feat/nova-bitvm3-*']
-    paths: ['src/nova.rs', 'nova-bitvm3/**', 'docs/nova-bitvm3*', '.github/workflows/nova-bitvm3.yml']
+    paths: ['src/nova.rs', 'src/nova/**', 'src/lib.rs', 'nova-bitvm3/**', 'docs/nova-bitvm3*', 'Cargo.toml', 'build.rs', '.github/workflows/nova-bitvm3.yml']
   pull_request:
-    paths: ['src/nova.rs', 'src/lib.rs', 'nova-bitvm3/**', 'Cargo.toml', 'build.rs', '.github/workflows/nova-bitvm3.yml']
+    paths: ['src/nova.rs', 'src/nova/**', 'src/lib.rs', 'nova-bitvm3/**', 'Cargo.toml', 'build.rs', '.github/workflows/nova-bitvm3.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,20 +23,28 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare evidence
         run: mkdir -p nova-bitvm3/results
-      - name: Boolean reference
+      - name: Boolean and complete-curve references
         run: |
           set -o pipefail
           python3 nova-bitvm3/reference.py 2>&1 | tee nova-bitvm3/results/python.txt
+          python3 nova-bitvm3/curve_reference.py 2>&1 | tee nova-bitvm3/results/curve-python.txt
       - name: Toolchain and dependency evidence
         run: |
           rustup toolchain install 1.90.0 --profile minimal
           rustc +1.90.0 --version > nova-bitvm3/results/rustc.txt
           cargo +1.90.0 generate-lockfile --manifest-path nova-bitvm3/Cargo.toml
-          cargo +1.90.0 tree --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference > nova-bitvm3/results/dependencies.txt
+          cargo +1.90.0 tree --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference > nova-bitvm3/results/dependencies.txt
+          find "$HOME/.cargo/registry/src" -path '*/nova-snark-0.76.0/src/provider/keccak.rs' -exec cp {} nova-bitvm3/results/pinned-nova-keccak.rs \;
       - name: Execute and garble/evaluate Pasta kernels
         run: |
           set -o pipefail
           /usr/bin/time -v -o nova-bitvm3/results/kernels-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --lib -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/kernels.txt
+      - name: Build independent curve and transcript tests
+        run: cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript --no-run
+      - name: Complete curve and exact transcript conformance
+        run: |
+          set -o pipefail
+          /usr/bin/time -v -o nova-bitvm3/results/m3-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m3.txt
       - name: Real Nova compressed proof reference
         run: |
           set -o pipefail

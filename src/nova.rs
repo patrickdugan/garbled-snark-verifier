@@ -7,6 +7,8 @@ use crate::{
     circuit::{FALSE_WIRE, TRUE_WIRE, generate_component_key},
 };
 
+pub mod curve;
+
 pub type Word = [WireId; 256];
 
 /// Pallas scalar field = Vesta base field, and conversely.
