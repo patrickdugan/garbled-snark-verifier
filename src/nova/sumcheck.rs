@@ -9,6 +9,7 @@ use super::{
 };
 
 pub mod chain;
+pub mod r1cs;
 
 /// compressed = [a0,a2] (quadratic) or [a0,a2,a3] (cubic).
 /// The verifier owns the number of coefficients, domain and challenge schedule.
