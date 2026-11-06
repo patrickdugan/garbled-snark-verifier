@@ -52,7 +52,8 @@ def plans(suite: str, output: Path) -> list[tuple[str, list[str], list[str]]]:
         'smoke': ['--lib'],
         'transcript': ['--test', 'transcript', '--test', 'boolean_transcript', '--test', 'structured_transcript'],
         'curves': ['--test', 'curves'],
-        'all': ['--lib', '--test', 'curves', '--test', 'transcript', '--test', 'boolean_transcript', '--test', 'structured_transcript'],
+        'sumcheck': ['--test', 'sumcheck'],
+        'all': ['--lib', '--test', 'curves', '--test', 'transcript', '--test', 'boolean_transcript', '--test', 'structured_transcript', '--test', 'sumcheck'],
     }
     if suite == 'native':
         target = ['--features', 'native-reference', '--bin', 'nova-reference']
@@ -99,7 +100,7 @@ def run_logged(args: list[str], cwd: Path, env: dict[str, str], log: Path, timeo
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--suite', choices=['smoke', 'transcript', 'curves', 'all', 'native'], default='transcript')
+    parser.add_argument('--suite', choices=['smoke', 'transcript', 'curves', 'sumcheck', 'all', 'native'], default='transcript')
     parser.add_argument('--jobs', type=positive, default=2, help='Cargo build parallelism')
     parser.add_argument('--threads', type=positive, default=2, help='Rayon parallelism; tests stay serial')
     parser.add_argument('--timeout-minutes', type=positive, default=30, help='per command, not total run')

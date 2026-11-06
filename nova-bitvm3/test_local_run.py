@@ -15,7 +15,7 @@ class LocalRunnerTests(unittest.TestCase):
         self.assertEqual(name, 'all')
         self.assertIn('--no-run', build)
         self.assertNotIn('--no-run', execute)
-        for target in ['curves', 'transcript', 'boolean_transcript', 'structured_transcript']:
+        for target in ['curves', 'transcript', 'boolean_transcript', 'structured_transcript', 'sumcheck']:
             self.assertIn(target, build); self.assertIn(target, execute)
         self.assertIn('--test-threads=1', execute)
     def test_native_is_separate_and_build_only_plan_does_not_execute(self):

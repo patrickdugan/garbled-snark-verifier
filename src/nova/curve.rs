@@ -45,7 +45,7 @@ fn zero<C: CircuitContext>(c: &mut C, a: &Word) -> WireId {
 
 // Internal operands must be canonical. The public predicate enforces this
 // for external values; modular arithmetic preserves it for intermediates.
-fn product<C: CircuitContext>(c: &mut C, f: PastaField, a: &Word, b: &Word) -> Word {
+pub(super) fn product<C: CircuitContext>(c: &mut C, f: PastaField, a: &Word, b: &Word) -> Word {
     let tag = [match f {
         PastaField::PallasBase => 0u8,
         PastaField::VestaBase => 1,
@@ -79,7 +79,7 @@ fn product<C: CircuitContext>(c: &mut C, f: PastaField, a: &Word, b: &Word) -> W
     out.try_into().expect("fixed output arity")
 }
 
-fn difference<C: CircuitContext>(c: &mut C, f: PastaField, a: &Word, b: &Word) -> Word {
+pub(super) fn difference<C: CircuitContext>(c: &mut C, f: PastaField, a: &Word, b: &Word) -> Word {
     let mut borrow = FALSE_WIRE;
     let mut raw = [FALSE_WIRE; 256];
     for i in 0..256 {

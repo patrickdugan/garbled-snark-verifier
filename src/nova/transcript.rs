@@ -239,6 +239,11 @@ impl Transcript {
             valid: TRUE_WIRE,
         }
     }
+    /// The verifier-owned scalar field for arithmetic relations.
+    pub fn scalar_field(&self) -> PastaField {
+        self.field
+    }
+
     /// Low-level encoded bytes. Object-specific admission is the caller's job.
     pub fn absorb_bytes(&mut self, label: &[u8], representation: &[WireId]) {
         assert_eq!(

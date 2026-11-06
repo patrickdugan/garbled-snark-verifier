@@ -8,6 +8,7 @@ use crate::{
 };
 
 pub mod curve;
+pub mod sumcheck;
 pub mod transcript;
 
 pub type Word = [WireId; 256];

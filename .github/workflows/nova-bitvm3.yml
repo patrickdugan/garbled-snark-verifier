@@ -42,7 +42,7 @@ jobs:
           set -o pipefail
           /usr/bin/time -v -o nova-bitvm3/results/kernels-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --lib -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/kernels.txt
       - name: Build independent curve and transcript tests
-        run: cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript --test boolean_transcript --test structured_transcript --no-run
+        run: cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript --test boolean_transcript --test structured_transcript --test sumcheck --no-run
       - name: Complete curve and exact transcript conformance
         run: |
           set -o pipefail
@@ -57,6 +57,10 @@ jobs:
         run: |
           set -o pipefail
           /usr/bin/time -v -o nova-bitvm3/results/m5-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test structured_transcript -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m5.txt
+      - name: Spartan sumcheck round matches native Nova
+        run: |
+          set -o pipefail
+          /usr/bin/time -v -o nova-bitvm3/results/m6-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test sumcheck -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m6.txt
       - name: Real Nova compressed proof reference
         run: |
           set -o pipefail
