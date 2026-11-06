@@ -15,7 +15,7 @@ use garbled_snark_verifier::{
 };
 use halo2curves::{
     CurveAffine,
-    group::{Curve, Group},
+    group::Curve,
     pasta::{Fp, Fq, Pallas, Vesta},
 };
 use num_bigint::BigUint;
@@ -26,7 +26,7 @@ use std::io::{BufWriter, Write};
 const N: usize = 3 * 513 + 256;
 const CAP: usize = 65536; // allocator reservation, not an RSS limit
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Point {
     x: BigUint,
     y: BigUint,
@@ -34,13 +34,17 @@ struct Point {
 }
 
 fn point<A: CurveAffine>(p: A) -> Point {
-    match Option::<halo2curves::Coordinates<A>>::from(p.coordinates()) {
-        Some(coords) => Point {
-            x: BigUint::from_bytes_le(coords.x().to_repr().as_ref()),
-            y: BigUint::from_bytes_le(coords.y().to_repr().as_ref()),
-            infinity: false,
-        },
-        None => Point { x: 0u8.into(), y: 0u8.into(), infinity: true },
+    // halo2curves permits Coordinates::from_xy(0,0) for the identity.
+    // The presence of coordinates therefore cannot determine infinity.
+    if bool::from(p.is_identity()) {
+        return Point { x: 0u8.into(), y: 0u8.into(), infinity: true };
+    }
+    let coords = Option::<halo2curves::Coordinates<A>>::from(p.coordinates())
+        .expect("finite oracle point has coordinates");
+    Point {
+        x: BigUint::from_bytes_le(coords.x().to_repr().as_ref()),
+        y: BigUint::from_bytes_le(coords.y().to_repr().as_ref()),
+        infinity: false,
     }
 }
 
@@ -117,13 +121,37 @@ fn fixtures(curve: PastaCurve) -> Vec<(Point, Point, Point)> {
 }
 
 #[test]
+fn oracle_identity_encoding_is_explicit() {
+    let identity = Point { x: 0u8.into(), y: 0u8.into(), infinity: true };
+    for curve in [PastaCurve::Pallas, PastaCurve::Vesta] {
+        let cases = fixtures(curve);
+        assert_eq!(cases[0], (identity.clone(), identity.clone(), identity.clone()));
+        assert_eq!(cases[1].0, identity);
+        assert!(!cases[1].1.infinity);
+        assert_eq!(cases[1].1, cases[1].2);
+        assert_eq!(cases[6].2, identity);
+        for (p, q, r) in &cases {
+            for v in [p, q, r] {
+                let m = modulus(curve);
+                assert!(v.x < m && v.y < m);
+                if v.infinity {
+                    assert_eq!(v, &identity);
+                } else {
+                    assert_eq!((&v.y * &v.y) % &m, (&v.x * &v.x * &v.x + 5u8) % &m);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn complete_addition_matches_halo2curves() {
     for curve in [PastaCurve::Pallas, PastaCurve::Vesta] {
         let m = modulus(curve);
         let cases = fixtures(curve);
         for (i, (p, q, r)) in cases.iter().enumerate() {
             let s = slope(p, q, &m);
-            assert!(execute(curve, p, q, r, &s), "valid {curve:?} case {i}");
+            assert!(execute(curve, p, q, r, &s), "valid {curve:?} case {i}: {p:?} + {q:?} = {r:?}");
             assert!(!execute(curve, p, q, r, &((&s + 1u8) % &m)), "slope {curve:?} case {i}");
             // Substitute another on-curve output, ensuring membership alone is insufficient.
             let wrong = if r.infinity { &cases[1].2 } else { &cases[0].2 };

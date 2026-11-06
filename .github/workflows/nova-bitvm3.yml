@@ -44,7 +44,7 @@ jobs:
       - name: Complete curve and exact transcript conformance
         run: |
           set -o pipefail
-          /usr/bin/time -v -o nova-bitvm3/results/m3-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m3.txt
+          /usr/bin/time -v -o nova-bitvm3/results/m3-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test curves --test transcript --no-fail-fast -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m3.txt
       - name: Real Nova compressed proof reference
         run: |
           set -o pipefail
