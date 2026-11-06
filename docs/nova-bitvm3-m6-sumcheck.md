@@ -19,3 +19,12 @@ This runs on GitHub and leaves local header proving untouched.
 This is a per-round check. Its initial claim and final evaluation must still
 be bound to the Spartan R1CS statement and IPA openings before it can accept
 an entire Nova proof. The final Bitcoin transaction setup is separate.
+
+## Disk-backed M6 conformance extension
+
+The cubic round now has an additional streamed garbling/evaluation test. It
+writes ciphertexts with a fixed 64-KiB writer buffer, reopens the generated
+stream through FileSource, verifies its digest, and checks the result label
+for one valid and two mutated input assignments. The CI run supplies measured
+non-free gate count and streamed ciphertext bytes. These are per-round costs
+and exclude cut-and-choose and full proof inputs.

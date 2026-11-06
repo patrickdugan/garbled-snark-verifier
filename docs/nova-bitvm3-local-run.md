@@ -32,6 +32,16 @@ For only the new work:
 python nova-bitvm3/local_run.py --suite transcript --jobs 4 --threads 4
 ```
 
+## Per-round Spartan conformance
+
+The added `sumcheck` suite checks one degree-2 or degree-3 Spartan round
+against Nova 0.76, including a streamed cubic-round garbling benchmark.
+It remains a component test:
+
+```sh
+python nova-bitvm3/local_run.py --suite sumcheck --jobs 2 --threads 2
+```
+
 ## Native transparent proof baseline
 
 ```sh
