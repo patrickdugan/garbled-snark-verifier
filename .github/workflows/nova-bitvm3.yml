@@ -29,6 +29,7 @@ jobs:
           python3 nova-bitvm3/reference.py 2>&1 | tee nova-bitvm3/results/python.txt
           python3 nova-bitvm3/curve_reference.py 2>&1 | tee nova-bitvm3/results/curve-python.txt
           python3 nova-bitvm3/test_local_run.py 2>&1 | tee nova-bitvm3/results/local-runner-tests.txt
+          python3 nova-bitvm3/audit_real_header_fixtures.py 2>&1 | tee nova-bitvm3/results/m11-fixture-audit.txt
           python3 nova-bitvm3/local_run.py --suite all --plan > nova-bitvm3/results/local-plan.json
       - name: Toolchain and dependency evidence
         run: |

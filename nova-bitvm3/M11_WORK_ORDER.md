@@ -21,6 +21,57 @@ The proof path must remain transparent through the final wrapper. Keep the
 Pallas/Vesta Nova 0.76.0 baseline, existing headers/checkpoints and fold width k
 unchanged while evaluating a separate final proof format.
 
+## Step A verified-key inventory captured (source commit 596cb73)
+
+Read [the k=20 fixture README](fixtures/bitcoin-header/README.md) and
+[k20 inventory](fixtures/bitcoin-header/k20-testnet4-verifier-inventory.json)
+before further implementation. Source proof: testnet4 NHT4, k=20, two
+shards covering genesis to height 40 and then 80. The key stays off Git.
+Its SHA-256 is
+`9e94b9083b5be30e796e974218804214b7106284c071eeec9b15945735321727`,
+length **500,333,512 bytes**. A bincode 1.x fixed-int mirror decoded the
+key, consuming exactly all bytes, reusing Nova 0.76.0's public matrix,
+Poseidon and commitment types.
+
+| Actual recorded count | Primary/Pallas | Secondary/Vesta |
+| --- | ---: | ---: |
+| Padded rows and variables | 2,097,152 | 16,384 |
+| Matrix A+B+C nonzeros | 9,409,295 | 126,487 |
+| Matrix evaluation field multiplications | 25,110,046 | 302,126 |
+| IPA s-vector field multiplications | 2,097,151 | 16,383 |
+| IPA opening terms | 2,097,152 | 16,384 |
+
+Total inventoried linear scalar work: **27,525,706** field multiplies.
+Total IPA MSM terms: **2,113,536**. The corresponding M2 checked-mul
+*proxy* price is 9,935,761,414,878 gates, or 158,972,182,638,048
+ciphertext bytes (**158.97 TB decimal**) for one unreplicated circuit.
+The 12 checked-point-adds-per-MSM-term sensitivity scenario yields
+110,079,777,374,208 gates and 1.7613 PB. These proxy scenarios are
+neither measured complete garbled circuits nor optimized lower bounds.
+
+Native proof verification on the original machine was reported successful
+for both 13,288-byte compressed proofs, including mutation rejections.
+This repo now retains proof bundles and their receipts. Its
+`real_header_proof_native` and `real_header_verifier_inventory` tests
+**skip when NOVA_REAL_VK is missing**; a green GitHub job alone does not
+reverify the real proof. The small CI fixture audit independently checks
+the committed bundles, receipt hashes, full 17-field-state continuity,
+inventory arithmetic and mutation detection. That audit performs
+**no cryptographic proof verification**.
+
+**Open reproducibility gates:** deterministically regenerate the k=20
+key using `vk-export 20 --network testnet4` and match the recorded
+SHA-256; acquire a controlled CI/keyed test arrangement that actually
+executes the native proof verification; capture all Poseidon/NIFS operations
+and installed Nova IPA source hashes. Record explicit statement binding
+(network, k, steps, checkpoint and final tip).
+
+**Next decision:** prototype a transparent outer argument over the complete
+native verifier, with binding to the authenticated key and public state,
+at a small k first. Alternatively design and test a commitment-consistency
+proof from the original Pedersen commitments to the proposed hash PCS.
+Never treat a WHIR/BaseFold-only opening as a native Nova proof replacement.
+
 ## Evidence and scope
 
 M2 measured 360,963 non-free gates per checked Pasta multiplication predicate.
