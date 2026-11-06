@@ -23,11 +23,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare evidence
         run: mkdir -p nova-bitvm3/results
-      - name: Boolean and complete-curve references
+      - name: Boolean references and local runner tests
         run: |
           set -o pipefail
           python3 nova-bitvm3/reference.py 2>&1 | tee nova-bitvm3/results/python.txt
           python3 nova-bitvm3/curve_reference.py 2>&1 | tee nova-bitvm3/results/curve-python.txt
+          python3 nova-bitvm3/test_local_run.py 2>&1 | tee nova-bitvm3/results/local-runner-tests.txt
+          python3 nova-bitvm3/local_run.py --suite all --plan > nova-bitvm3/results/local-plan.json
       - name: Toolchain and dependency evidence
         run: |
           rustup toolchain install 1.90.0 --profile minimal
@@ -48,7 +50,9 @@ jobs:
       - name: Boolean Keccak and Nova transcript conformance
         run: |
           set -o pipefail
-          /usr/bin/time -v -o nova-bitvm3/results/m4-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference --test boolean_transcript -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m4.txt
+          /usr/bin/time -v -o nova-bitvm3/results/m4-time.txt cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/Cargo.toml --features native-reference,curve-reference --test boolean_transcript -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/results/m4.txt
+      - name: Exercise local runner with real transcript tests
+        run: python3 nova-bitvm3/local_run.py --suite transcript --jobs 2 --threads 2 --output nova-bitvm3/results/local-ci
       - name: Real Nova compressed proof reference
         run: |
           set -o pipefail

@@ -169,13 +169,8 @@ pub fn reduce_wide<C: CircuitContext>(c: &mut C, field: PastaField, input: &[Wir
             key.clone(),
             inputs,
             |ctx, wires| {
-                let shifted: Word = std::array::from_fn(|j| {
-                    if j == 0 {
-                        wires[256]
-                    } else {
-                        wires[j - 1]
-                    }
-                });
+                let shifted: Word =
+                    std::array::from_fn(|j| if j == 0 { wires[256] } else { wires[j - 1] });
                 let (reduced, borrow) = sub_modulus(ctx, field, &shifted);
                 (0..256)
                     .map(|j| mux(ctx, borrow, reduced[j], shifted[j]))
@@ -246,7 +241,11 @@ impl Transcript {
     }
     /// Low-level encoded bytes. Object-specific admission is the caller's job.
     pub fn absorb_bytes(&mut self, label: &[u8], representation: &[WireId]) {
-        assert_eq!(representation.len() % 8, 0, "representation must contain bytes");
+        assert_eq!(
+            representation.len() % 8,
+            0,
+            "representation must contain bytes"
+        );
         self.pending.extend(constants(label));
         self.pending.extend_from_slice(representation);
     }
@@ -260,7 +259,10 @@ impl Transcript {
         self.pending.extend(constants(label));
     }
     fn advance<C: CircuitContext>(&mut self, c: &mut C, label: &[u8]) {
-        let next = self.round.checked_add(1).expect("transcript counter overflow");
+        let next = self
+            .round
+            .checked_add(1)
+            .expect("transcript counter overflow");
         self.pending.extend(constants(b"NoDS"));
         self.pending.extend(constants(&self.round.to_le_bytes()));
         self.pending.extend_from_slice(&self.state);
@@ -291,6 +293,9 @@ impl Transcript {
         if start_with_one {
             value[num_bits - 1] = TRUE_WIRE;
         }
-        Challenge { value, valid: self.valid }
+        Challenge {
+            value,
+            valid: self.valid,
+        }
     }
 }
