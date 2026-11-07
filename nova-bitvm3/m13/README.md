@@ -18,14 +18,14 @@ M13 builds that final layer and prices its complete verifier from exact counts.
 - **Real proofs.** Our control-C guest (testnet4 heights 1–4, public inputs) runs through SP1's
   compressed proof (369 s), SP1's shrink (27 s) and the BLAKE3 wrap (67 s). The result:
   - a **1,099,069-byte proof** with a 104-byte key;
-  - native verification in **0.04 s and 5.7 MB**.
+  - native verification in **0.012 s on one thread, 5.7 MB peak RSS**.
 
   A second guest's compressed proof gave the same key and the same proof size, so the final key is
   one pin for every guest.
 - **The complete verifier, counted exactly.** One verification performs:
   - **33,626 BLAKE3 compressions**;
   - **744,425 KoalaBear multiplications** (344,386 general, 400,039 by small constants);
-  - **590,427 additions, subtractions and sum terms**.
+  - **588,415 additions, subtractions and sum terms**.
 
   Every field operation is counted by instrumenting KoalaBear's arithmetic itself, including chip
   constraint evaluation, the jagged evaluation and the sumchecks. M12 could only bound those.
@@ -100,8 +100,10 @@ the committed proof). These are all refused:
 
 ## Counting the verifier
 
-The counts come from one complete `verify_final` run of the committed proof, single process,
-built two ways:
+The counts come from one complete `verify_final` run of the committed proof on one thread. With
+more threads, rayon's parallel reductions add one partial sum per thread, so the addition count
+varies with the thread count and between runs. `m13-verify` therefore pins rayon to one thread.
+The binary is built two ways:
 
 - **BLAKE3** is counted inside `ctx.rs`, per role. One compression is one 64-byte block, plus one
   per parent node of BLAKE3's chunk tree.
@@ -123,8 +125,8 @@ built two ways:
 | BLAKE3, transcript | 1,144 compressions (504 squeezes) |
 | KoalaBear multiplications, general | 344,386 |
 | KoalaBear multiplications by small constants | 400,039 |
-| KoalaBear additions / subtractions / sum terms | 522,675 / 67,374 / 378 |
-| Native wall time / peak RSS | 0.04 s / 5.7 MB |
+| KoalaBear additions / subtractions / sum terms | 520,663 / 67,374 / 378 |
+| Native verification time (one thread) / peak RSS | 0.012 s / 5.7 MB |
 
 The second guest's proof gave identical counts except
 ([`results/verify-counts-second-guest.json`](results/verify-counts-second-guest.json)):
@@ -144,7 +146,7 @@ counts and M12's measured gate prices. CI re-runs it and requires the output to 
 | --- | ---: |
 | 33,692 BLAKE3 compressions (with margin) at 10,410 | 350,733,720 |
 | Merkle path swaps (256 AND per node) and root comparisons (255 per path) | 8,288,629 |
-| 590,427 linear field operations at 94 | 55,500,138 |
+| 588,415 linear field operations at 94 | 55,311,010 |
 | 354,386 general multiplications (with margin) at 2,068 | 732,870,248 |
 | 400,084 small-constant multiplications | 63.6 M (at ×3, 159) / 131.2 M (at ×11, 328) / 827.4 M (full) |
 | **Final verifier** | **1.21 × 10^9 / 1.28 × 10^9 / 1.97 × 10^9** |
@@ -177,7 +179,7 @@ into the NVMe swapfile set up for SP1 runs:
 | `shrink-wrap` ([`results/shrink-wrap-c4.json`](results/shrink-wrap-c4.json)) | 3 min 30 s (shrink 27 s, wrap setup 7 s, wrap prove 67 s) | 7.0 GiB / 3.5 GB | 1,099,173-byte final proof, verified |
 | `compress-direct`, heights 1–4,100 (throughput probe) | stopped at 14 min 39 s | 7.0 GiB / 27.5 GB | none: swap-bound |
 | `check-wrap-program` ([`results/check-wrap-program.json`](results/check-wrap-program.json)) | 2 min 05 s | 3.1 GB / 0 | BN254 key equal to SP1's |
-| `m13-verify verify` | 0.04 s | 5.7 MB | statement |
+| `m13-verify verify` (one thread) | 0.03 s (verification 0.012 s) | 5.7 MB / 0 | statement |
 
 Peak RAM sits at the 7 GiB cap in every proving run; the rest went to swap. Without swap, both
 the compressed proof and the BLAKE3 wrap were killed at a 9 GiB cgroup cap. The final layer

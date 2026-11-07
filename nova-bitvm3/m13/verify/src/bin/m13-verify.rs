@@ -1,13 +1,18 @@
 //! m13-verify verify WRAP.bin EXPECT.json
-//!     The complete final verifier, run once, single-threaded in effect for
-//!     counting: wall time, BLAKE3 compressions per role and (with the
-//!     `opcount` feature and patched p3-koala-bear) every KoalaBear operation.
+//!     The complete final verifier, run once on one thread: wall time,
+//!     BLAKE3 compressions per role and (with the `opcount` feature and
+//!     patched p3-koala-bear) every KoalaBear operation.
 use std::{collections::BTreeMap, time::Instant};
 
 use anyhow::{bail, ensure, Result};
 use m13_verify::{ctx, opcount, verify_final, Blake3WrapProof, FinalStatement};
 
 fn main() -> Result<()> {
+    // One rayon thread: a parallel reduction adds one partial sum per extra
+    // thread, so counts taken with more threads vary with the thread count
+    // and between runs. Single-threaded counts are deterministic and are the
+    // work of the sequential verifier, which is what a circuit evaluates.
+    std::env::set_var("RAYON_NUM_THREADS", "1");
     let a: Vec<String> = std::env::args().collect();
     ensure!(a.len() == 4 && a[1] == "verify", "usage: m13-verify verify WRAP.bin EXPECT.json");
     let bytes = std::fs::read(&a[2])?;

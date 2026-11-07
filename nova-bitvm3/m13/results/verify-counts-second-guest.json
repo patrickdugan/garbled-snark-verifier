@@ -22,7 +22,7 @@
   },
   "blake3_compressions_total": 33628,
   "koalabear_ops": {
-    "add": 522675,
+    "add": 520663,
     "halve": 0,
     "mul_2exp": 0,
     "mul_const": 400084,

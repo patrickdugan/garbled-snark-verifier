@@ -6,6 +6,7 @@ operation. Wall time is the only field allowed to differ.
 usage: compare_counts.py RECORDED.json FRESH.json
 """
 import json
+import os
 import sys
 
 
@@ -18,6 +19,9 @@ def main() -> int:
         bad.append('koalabear_ops missing: build with --features opcount and the patched p3-koala-bear')
     for k in bad:
         print(f'differs: {k}\n  recorded {recorded.get(k)}\n  fresh    {fresh.get(k)}')
+        if os.environ.get('GITHUB_ACTIONS') == 'true':
+            # Annotations are readable without signing in; job logs are not.
+            print(f'::error title=m13 count differs::{k}: recorded {recorded.get(k)} fresh {fresh.get(k)}')
     if bad:
         return 1
     print('counts identical to the recorded run:', ', '.join(keys))

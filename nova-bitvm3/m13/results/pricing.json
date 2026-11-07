@@ -29,7 +29,7 @@
       }
     },
     "koalabear_ops_max": {
-      "add": 522675,
+      "add": 520663,
       "halve": 0,
       "mul_2exp": 0,
       "mul_const": 400084,
@@ -54,7 +54,7 @@
     "blake3_compressions": 350733720,
     "merkle_swaps": 7730944,
     "merkle_root_compares": 557685,
-    "field_linear": 55500138,
+    "field_linear": 55311010,
     "field_mul_full_with_margin": 732870248,
     "field_mul_const": {
       "upper": 827373712,
@@ -64,19 +64,19 @@
   },
   "final_verifier": {
     "upper": {
-      "non_free_gates": 1974766447,
-      "ciphertext_bytes": 31596263152,
-      "ciphertext_gb": 31.596
+      "non_free_gates": 1974577319,
+      "ciphertext_bytes": 31593237104,
+      "ciphertext_gb": 31.593
     },
     "central": {
-      "non_free_gates": 1278620287,
-      "ciphertext_bytes": 20457924592,
-      "ciphertext_gb": 20.458
+      "non_free_gates": 1278431159,
+      "ciphertext_bytes": 20454898544,
+      "ciphertext_gb": 20.455
     },
     "lower": {
-      "non_free_gates": 1211006091,
-      "ciphertext_bytes": 19376097456,
-      "ciphertext_gb": 19.376
+      "non_free_gates": 1210816963,
+      "ciphertext_bytes": 19373071408,
+      "ciphertext_gb": 19.373
     }
   },
   "share_upper": {

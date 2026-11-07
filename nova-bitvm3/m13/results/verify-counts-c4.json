@@ -18,7 +18,7 @@
   },
   "blake3_compressions_total": 33626,
   "koalabear_ops": {
-    "add": 522675,
+    "add": 520663,
     "halve": 0,
     "mul_2exp": 0,
     "mul_const": 400039,
@@ -27,7 +27,7 @@
     "sum_adds": 378
   },
   "public_values_len": 187,
-  "seconds": 0.040338316,
+  "seconds": 0.013102777,
   "statement": {
     "committed_values_sha256": "cd9beb309f279b517a02582c54dd375bae18f66be1614a37f6eb33e1bbd36567",
     "exit_code": 0,
