@@ -1,0 +1,36 @@
+name: Nova M14 garbled final verifier
+on:
+  push:
+    branches: ['main', 'feat/nova-bitvm3-*']
+    paths: ['nova-bitvm3/m14/**', 'nova-bitvm3/m12/gates/**', 'src/**', 'Cargo.toml', '.github/workflows/nova-m14.yml']
+  pull_request:
+    paths: ['nova-bitvm3/m14/**', 'nova-bitvm3/m12/gates/**', '.github/workflows/nova-m14.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nova-m14-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  m14:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: '4'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          mkdir -p nova-bitvm3/m14/ci
+          rustup toolchain install 1.90.0 --profile minimal
+          rustc +1.90.0 --version | tee nova-bitvm3/m14/ci/rustc.txt
+      - name: Gadgets against SP1's field, blake3 and M13's transcript; gate counts; garbled evaluation
+        run: |
+          set -o pipefail
+          cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/m14/circuit/Cargo.toml -- --test-threads=2 --nocapture 2>&1 | tee nova-bitvm3/m14/ci/gadgets.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nova-m14-${{ github.sha }}
+          path: nova-bitvm3/m14/ci/
