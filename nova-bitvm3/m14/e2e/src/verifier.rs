@@ -270,3 +270,254 @@ pub fn chip_index(s: &Shape) -> BTreeMap<String, usize> {
 }
 
 pub use hash::DOMAIN_V2;
+
+// ------------------------------------------------------------------ zerocheck
+use slop_uni_stark::{Entry, SymbolicExpression, SymbolicVariable};
+
+/// Evaluate a chip's symbolic constraint (SP1's own `get_symbolic_constraints`, the same `eval` as
+/// the verifier folder) on circuit values. Shared subexpressions (one `Rc` node) are computed once.
+pub fn eval_symbolic<C: CircuitContext>(
+    c: &mut C,
+    root: &SymbolicExpression<F>,
+    prep: &[Ext],
+    main: &[Ext],
+    pv: &[Fe],
+    memo: &mut std::collections::HashMap<usize, Ext>,
+) -> Ext {
+    // iterative post-order: (node, children pushed?)
+    let mut stack: Vec<(&SymbolicExpression<F>, bool)> = vec![(root, false)];
+    let key = |e: &SymbolicExpression<F>| e as *const SymbolicExpression<F> as usize;
+    while let Some((e, expanded)) = stack.pop() {
+        if memo.contains_key(&key(e)) {
+            continue;
+        }
+        let kids: Vec<&SymbolicExpression<F>> = match e {
+            SymbolicExpression::Add { x, y, .. } | SymbolicExpression::Sub { x, y, .. } | SymbolicExpression::Mul { x, y, .. } => {
+                vec![x.as_ref(), y.as_ref()]
+            }
+            SymbolicExpression::Neg { x, .. } => vec![x.as_ref()],
+            _ => vec![],
+        };
+        if !expanded && kids.iter().any(|k| !memo.contains_key(&key(k))) {
+            stack.push((e, true));
+            for k in kids {
+                if !memo.contains_key(&key(k)) {
+                    stack.push((k, false));
+                }
+            }
+            continue;
+        }
+        let v = match e {
+            SymbolicExpression::Variable(var) => match var.entry {
+                Entry::Preprocessed { offset: 0 } => prep[var.index].clone(),
+                Entry::Main { offset: 0 } => main[var.index].clone(),
+                Entry::Public => Ext::from_base(&pv[var.index]),
+                other => panic!("constraint uses {other:?}"),
+            },
+            SymbolicExpression::Constant(k) => Ext::constant([k.as_canonical_u32(), 0, 0, 0]),
+            SymbolicExpression::Add { x, y, .. } => {
+                let (a, b) = (memo[&key(x)].clone(), memo[&key(y)].clone());
+                ext::add(c, &a, &b)
+            }
+            SymbolicExpression::Sub { x, y, .. } => {
+                let (a, b) = (memo[&key(x)].clone(), memo[&key(y)].clone());
+                ext::sub(c, &a, &b)
+            }
+            SymbolicExpression::Mul { x, y, .. } => {
+                let (a, b) = (memo[&key(x)].clone(), memo[&key(y)].clone());
+                ext::mul(c, &a, &b)
+            }
+            SymbolicExpression::Neg { x, .. } => {
+                let a = memo[&key(x)].clone();
+                ext::neg(c, &a)
+            }
+            other => panic!("constraint uses {other:?}"),
+        };
+        memo.insert(key(e), v);
+    }
+    memo[&key(root)].clone()
+}
+
+/// `ShardVerifier::eval_constraints`: the chip's constraints folded as acc <- acc * alpha + c.
+pub fn eval_constraints<C: CircuitContext>(
+    c: &mut C,
+    constraints: &[SymbolicExpression<F>],
+    prep: &[Ext],
+    main: &[Ext],
+    alpha: &Ext,
+    pv: &[Fe],
+) -> Ext {
+    let mut memo = std::collections::HashMap::new();
+    let mut acc = Ext::zero();
+    for k in constraints {
+        let v = eval_symbolic(c, k, prep, main, pv, &mut memo);
+        let t = ext::mul(c, &acc, alpha);
+        acc = ext::add(c, &t, &v);
+    }
+    acc
+}
+
+/// The chip's constraints as symbolic expressions over correctly labelled variables.
+///
+/// p3-uni-stark 0.4.3-succinct's `SymbolicAirBuilder::new` labels preprocessed columns as
+/// `Entry::Main` (SP1 only counts constraints and degrees with it), so preprocessed column i and
+/// main column i would be indistinguishable. `SymBuilder` is that builder with the preprocessed
+/// columns labelled `Entry::Preprocessed`.
+pub fn chip_constraints(chip: &WrapChip) -> Vec<SymbolicExpression<F>> {
+    let mut b = SymBuilder::new(chip.preprocessed_width(), chip.width(), PROOF_MAX_NUM_PVS);
+    slop_air::Air::eval(chip, &mut b);
+    b.constraints
+}
+
+pub struct SymBuilder {
+    preprocessed: slop_matrix::dense::RowMajorMatrix<SymbolicVariable<F>>,
+    main: slop_matrix::dense::RowMajorMatrix<SymbolicVariable<F>>,
+    public_values: Vec<SymbolicVariable<F>>,
+    constraints: Vec<SymbolicExpression<F>>,
+}
+
+impl SymBuilder {
+    fn new(preprocessed_width: usize, width: usize, num_public_values: usize) -> Self {
+        let rows = |w: usize, entry: fn(usize) -> Entry| -> Vec<SymbolicVariable<F>> {
+            [0, 1].into_iter().flat_map(|offset| (0..w).map(move |i| SymbolicVariable::new(entry(offset), i))).collect()
+        };
+        SymBuilder {
+            preprocessed: slop_matrix::dense::RowMajorMatrix::new(
+                rows(preprocessed_width, |offset| Entry::Preprocessed { offset }),
+                preprocessed_width.max(1),
+            ),
+            main: slop_matrix::dense::RowMajorMatrix::new(rows(width, |offset| Entry::Main { offset }), width),
+            public_values: (0..num_public_values).map(|i| SymbolicVariable::new(Entry::Public, i)).collect(),
+            constraints: Vec::new(),
+        }
+    }
+}
+
+impl slop_air::AirBuilder for SymBuilder {
+    type F = F;
+    type Expr = SymbolicExpression<F>;
+    type Var = SymbolicVariable<F>;
+    type M = slop_matrix::dense::RowMajorMatrix<SymbolicVariable<F>>;
+    fn main(&self) -> Self::M {
+        self.main.clone()
+    }
+    fn is_first_row(&self) -> Self::Expr {
+        SymbolicExpression::IsFirstRow
+    }
+    fn is_last_row(&self) -> Self::Expr {
+        SymbolicExpression::IsLastRow
+    }
+    fn is_transition_window(&self, size: usize) -> Self::Expr {
+        assert_eq!(size, 2);
+        SymbolicExpression::IsTransition
+    }
+    fn assert_zero<I: Into<Self::Expr>>(&mut self, x: I) {
+        self.constraints.push(x.into());
+    }
+}
+impl slop_air::AirBuilderWithPublicValues for SymBuilder {
+    type PublicVar = SymbolicVariable<F>;
+    fn public_values(&self) -> &[Self::PublicVar] {
+        &self.public_values
+    }
+}
+impl slop_air::PairBuilder for SymBuilder {
+    fn preprocessed(&self) -> Self::M {
+        self.preprocessed.clone()
+    }
+}
+impl sp1_hypercube::air::EmptyMessageBuilder for SymBuilder {}
+
+pub struct ZerocheckOut {
+    pub ok: W,
+    /// The zerocheck sumcheck point (SP1's order): the opening point of the PCS stage.
+    pub point: Vec<Ext>,
+    /// Per chip (shard order): opened preprocessed and main values.
+    pub prep: Vec<Vec<Ext>>,
+    pub main: Vec<Vec<Ext>>,
+}
+
+/// `ShardVerifier::verify_zerocheck`.
+pub fn zerocheck<C: CircuitContext>(
+    c: &mut C,
+    t: &mut Transcript,
+    s: &Shape,
+    inp: &mut Inputs,
+    pv: &[Fe],
+    gkr: &LogupOut,
+    constraints: &[Vec<SymbolicExpression<F>>],
+) -> ZerocheckOut {
+    let mut oks = Vec::new();
+    let alpha = sample_ext(c, t);
+    let batch = sample_ext(c, t);
+    let lambda = sample_ext(c, t);
+
+    // Claimed sum: lambda-Horner over chips of the batched GKR openings (main, then preprocessed).
+    let batch_powers = |c: &mut C, n: usize| -> Vec<Ext> {
+        let mut p = Vec::with_capacity(n);
+        let mut x = batch.clone();
+        for _ in 0..n {
+            p.push(x.clone());
+            x = ext::mul(c, &x, &batch);
+        }
+        p
+    };
+    let mut claimed = Ext::zero();
+    for (prep, main) in gkr.prep.iter().zip(&gkr.main) {
+        let vals: Vec<&Ext> = main.iter().chain(prep.iter().flatten()).collect();
+        let pw = batch_powers(c, vals.len());
+        let mut m = Ext::zero();
+        for (v, p) in vals.iter().zip(&pw) {
+            let tv = ext::mul(c, v, p);
+            m = ext::add(c, &m, &tv);
+        }
+        let tl = ext::mul(c, &lambda, &claimed);
+        claimed = ext::add(c, &tl, &m);
+    }
+
+    // The sumcheck (degree MAX_CONSTRAINT_DEGREE + 1): its point and evaluation are derived.
+    let polys: Vec<Vec<Ext>> =
+        (0..s.max_log_row_count).map(|_| (0..sp1_hypercube::MAX_CONSTRAINT_DEGREE + 2).map(|_| inp.ext()).collect()).collect();
+    let (ok_sc, point, eval) = sumcheck::verify(c, t, &claimed, &polys);
+    oks.push(ok_sc);
+
+    let eq = ml::full_lagrange_eval(c, &gkr.trace_point, &point);
+    let mut point_extended = vec![Ext::zero()];
+    point_extended.extend(point.iter().cloned());
+    let mut rlc = Ext::zero();
+    let (mut preps, mut mains) = (Vec::new(), Vec::new());
+    for (i, (chip, degree)) in s.chips.iter().zip(&s.degrees).enumerate() {
+        // SP1 requires bit-valued heights with no bit below a set top bit; they are constants here.
+        assert!(degree.iter().all(|&x| x <= 1) && (degree[0] == 0 || degree[1..].iter().all(|&x| x == 0)));
+        let prep: Vec<Ext> = (0..chip.preprocessed_width()).map(|_| inp.ext()).collect();
+        let main: Vec<Ext> = (0..chip.width()).map(|_| inp.ext()).collect();
+        let geq = ml::full_geq(c, degree, &point_extended);
+        let zp = vec![Ext::zero(); prep.len()];
+        let zm = vec![Ext::zero(); main.len()];
+        let padded = eval_constraints(c, &constraints[i], &zp, &zm, &alpha, pv);
+        let ce = eval_constraints(c, &constraints[i], &prep, &main, &alpha, pv);
+        let pg = ext::mul(c, &padded, &geq);
+        let constraint_eval = ext::sub(c, &ce, &pg);
+        let vals: Vec<&Ext> = main.iter().chain(prep.iter()).collect();
+        let pw = batch_powers(c, vals.len());
+        let mut ob = Ext::zero();
+        for (v, p) in vals.iter().zip(&pw) {
+            let tv = ext::mul(c, v, p);
+            ob = ext::add(c, &ob, &tv);
+        }
+        let inner = ext::add(c, &constraint_eval, &ob);
+        let term = ext::mul(c, &eq, &inner);
+        let tl = ext::mul(c, &rlc, &lambda);
+        rlc = ext::add(c, &tl, &term);
+        preps.push(prep);
+        mains.push(main);
+    }
+    oks.push(ext::eq(c, &rlc, &eval));
+
+    t.observe_fe(&Fe::constant(s.chips.len() as u32));
+    for (p, m) in preps.iter().zip(&mains) {
+        observe_ext_slice_var(t, p);
+        observe_ext_slice_var(t, m);
+    }
+    ZerocheckOut { ok: f::and_all(c, &oks), point, prep: preps, main: mains }
+}

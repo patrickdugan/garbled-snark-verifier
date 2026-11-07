@@ -996,6 +996,7 @@ dependencies = [
  "slop-basefold",
  "slop-challenger",
  "slop-jagged",
+ "slop-matrix",
  "slop-merkle-tree",
  "slop-multilinear",
  "slop-stacked",

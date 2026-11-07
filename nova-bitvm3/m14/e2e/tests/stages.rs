@@ -126,3 +126,114 @@ fn logup_gkr_matches_sp1_on_the_real_proof() {
     }
     assert!(!stage_logup(&bad, &shape).0, "changed opening accepted");
 }
+
+type SV = sp1_hypercube::ShardVerifier<GC, m13_verify::Blake3WrapSCV2>;
+
+fn ef_of(v: [u32; 4]) -> native::EF {
+    use slop_algebra::AbstractExtensionField;
+    native::EF::from_base_slice(&v.map(F::from_canonical_u32))
+}
+
+/// Each chip's constraints evaluated by the circuit equal SP1's `eval_constraints` and
+/// `compute_padded_row_adjustment` on the real proof's openings and public values.
+#[test]
+fn constraint_evaluation_matches_sp1_per_chip() {
+    let proof = native::load(native::FIXTURE_V2);
+    let machine = native::machine();
+    let shard = &proof.proof;
+    let shape = Shape::new(&machine, &proof.vk, shard);
+    let alpha = [123_456_789u32, 987_654_321, 5, 7];
+    let num_pv = shape.num_pv;
+    for (chip, (name, opening)) in shape.chips.iter().zip(shard.opened_values.chips.iter()) {
+        assert_eq!(chip.name(), name.as_str());
+        let want = native::ef(SV::eval_constraints(chip, opening, ef_of(alpha), &shard.public_values));
+        let want_pad = native::ef(SV::compute_padded_row_adjustment(chip, ef_of(alpha), &shard.public_values));
+        let constraints = verifier::chip_constraints(chip);
+        let mut items = vec![Item::Ext(alpha)];
+        items.extend(shard.public_values[..num_pv].iter().map(|x| Item::Fe(native::fe(*x))));
+        items.extend(opening.preprocessed.local.iter().map(|x| Item::Ext(native::ef(*x))));
+        items.extend(opening.main.local.iter().map(|x| Item::Ext(native::ef(*x))));
+        let (pw, w) = (opening.preprocessed.local.len(), opening.main.local.len());
+        let r: StreamingResult<ExecuteMode, _, Vec<bool>> = CircuitBuilder::streaming_execute(Plain(native::bits(&items)), CAP, |c, wires| {
+            let mut inp = Inputs::new(wires);
+            let a = inp.ext();
+            let mut pv: Vec<m14_circuit::field::Fe> = (0..num_pv).map(|_| inp.fe()).collect();
+            pv.resize(sp1_hypercube::PROOF_MAX_NUM_PVS, m14_circuit::field::Fe::zero());
+            let prep: Vec<_> = (0..pw).map(|_| inp.ext()).collect();
+            let main: Vec<_> = (0..w).map(|_| inp.ext()).collect();
+            let got = verifier::eval_constraints(c, &constraints, &prep, &main, &a, &pv);
+            let zp = vec![m14_circuit::ext::Ext::zero(); pw];
+            let zm = vec![m14_circuit::ext::Ext::zero(); w];
+            let pad = verifier::eval_constraints(c, &constraints, &zp, &zm, &a, &pv);
+            got.0.iter().chain(pad.0.iter()).flat_map(|x| x.0.clone()).collect()
+        });
+        let vals: Vec<u32> = r.output_value.chunks(31).map(|b| b.iter().enumerate().fold(0u32, |a, (i, &x)| a | ((x as u32) << i))).collect();
+        eprintln!("chip {name}: {} constraints, {} gates", constraints.len(), r.gate_count.nonfree_gate_count());
+        assert_eq!(vals[..4], want, "chip {name}: constraint evaluation");
+        assert_eq!(vals[4..], want_pad, "chip {name}: padded-row adjustment");
+    }
+}
+
+/// Preamble, LogUp-GKR and zerocheck on the real proof: SP1 accepts natively; the circuit accepts,
+/// observes exactly SP1's transcript bytes, and rejects a changed opening.
+#[test]
+fn zerocheck_matches_sp1_on_the_real_proof() {
+    let proof = native::load(native::FIXTURE_V2);
+    let machine = native::machine();
+    let shard = &proof.proof;
+    let shape = Shape::new(&machine, &proof.vk, shard);
+    let constraints: Vec<_> = shape.chips.iter().map(verifier::chip_constraints).collect();
+
+    // SP1 natively up to the end of the zerocheck.
+    let sv = m13_verify::wrap_verifier_v2();
+    let mut ch = GC::default_challenger();
+    proof.vk.observe_into(&mut ch);
+    <m13_verify::ctx::Blake3ChallengerV2 as VariableLengthChallenger<F, m13_verify::ctx::Digest>>::observe_constant_length_extension_slice::<F>(&mut ch, &shard.public_values);
+    ch.observe(shard.main_commitment);
+    ch.observe(F::from_canonical_usize(shard.opened_values.chips.len()));
+    for (name, cv) in shard.opened_values.chips.iter() {
+        let acc = cv.degree.iter().fold(F::zero(), |acc, &x| x + F::two() * acc);
+        ch.observe(acc);
+        ch.observe(F::from_canonical_usize(name.len()));
+        name.as_bytes().iter().for_each(|b| ch.observe(F::from_canonical_u8(*b)));
+    }
+    let chips = native::shard_chips(&machine, shard);
+    let degrees = shard.opened_values.chips.iter().map(|(n, c)| (n.clone(), c.degree.clone())).collect();
+    LogUpGkrVerifier::<GC, m13_verify::Blake3WrapSCV2>::verify_logup_gkr(&chips, &degrees, shape.max_log_row_count, &shard.logup_gkr_proof, &shard.public_values, &mut ch).unwrap();
+    sv.shard_verifier()
+        .verify_zerocheck(&chips, &shard.opened_values, &shard.logup_gkr_proof.logup_evaluations, shard, &shard.public_values, &mut ch)
+        .expect("SP1 accepts the real zerocheck");
+
+    let run = |items: &[Item]| -> (bool, bool, Vec<u8>, u64) {
+        let input = native::bits(items);
+        let n = input.len();
+        let r: StreamingResult<ExecuteMode, _, Vec<bool>> = CircuitBuilder::streaming_execute(Plain(input), CAP, |c, w| {
+            let mut t = Transcript::new(verifier::DOMAIN_V2);
+            let mut inp = Inputs::new(w);
+            let pre = verifier::preamble(c, &mut t, &shape, &mut inp);
+            let g = verifier::logup(c, &mut t, &shape, &mut inp);
+            let z = verifier::zerocheck(c, &mut t, &shape, &mut inp, &pre.public_values, &g, &constraints);
+            assert_eq!(inp.used(), n, "inputs consumed");
+            let mut o = vec![g.ok, z.ok];
+            o.extend(t.log.iter().copied());
+            o
+        });
+        (r.output_value[0], r.output_value[1], bytes_of(&r.output_value[2..]), r.gate_count.nonfree_gate_count())
+    };
+    let mut items = native::items_logup(&machine, shard);
+    let n_logup = items.len();
+    items.extend(native::items_zerocheck(shard));
+    let (ok_g, ok_z, observed, gates) = run(&items);
+    eprintln!("M14-E2E preamble+logup+zerocheck: {} input items, {gates} gates", items.len());
+    let want = native_observed();
+    assert_eq!(observed[..], want[..observed.len()], "circuit observations differ from SP1's transcript");
+    assert!(ok_g && ok_z, "circuit rejects the real proof (logup {ok_g}, zerocheck {ok_z})");
+
+    let mut bad = items.clone();
+    let k = n_logup + 200;
+    if let Item::Ext(v) = &mut bad[k] {
+        v[1] = (v[1] + 1) % 0x7f00_0001;
+    }
+    let (_, ok_bad, _, _) = run(&bad);
+    assert!(!ok_bad, "changed zerocheck input accepted");
+}

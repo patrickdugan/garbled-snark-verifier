@@ -181,3 +181,17 @@ pub fn items_logup(machine: &Machine<F, WrapAir>, proof: &Shard) -> Vec<Item> {
 pub fn degrees(proof: &Shard) -> BTreeMap<String, Vec<u32>> {
     proof.opened_values.chips.iter().map(|(n, c)| (n.clone(), c.degree.iter().map(|x| fe(*x)).collect())).collect()
 }
+
+/// Items of the zerocheck stage: the sumcheck polynomials, then per chip the opened preprocessed
+/// and main values.
+pub fn items_zerocheck(proof: &Shard) -> Vec<Item> {
+    let mut v = Vec::new();
+    for p in &proof.zerocheck_proof.univariate_polys {
+        v.extend(p.coefficients.iter().map(|x| Item::Ext(ef(*x))));
+    }
+    for o in proof.opened_values.chips.values() {
+        v.extend(o.preprocessed.local.iter().map(|x| Item::Ext(ef(*x))));
+        v.extend(o.main.local.iter().map(|x| Item::Ext(ef(*x))));
+    }
+    v
+}
