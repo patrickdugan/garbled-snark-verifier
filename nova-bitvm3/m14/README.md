@@ -12,8 +12,112 @@ Order of work:
    sumchecks), the statement and pin checks;
 4. the whole circuit run on the committed proof and on mutated proofs, against `m13-verify`.
 
-Steps 1 and 2 are in [`circuit/`](circuit). Step 3 has its first sub-verifier, the sumcheck that
-the zerocheck, LogUp-GKR and the jagged PCS all use. Step 4 is not built yet.
+Steps 1 and 2 are in [`circuit/`](circuit). Steps 3 and 4 are in [`e2e/`](e2e): the complete final
+verifier, run on real proofs in plain execution and garbled (see
+[The complete final verifier](#the-complete-final-verifier)).
+
+## The complete final verifier
+
+[`e2e/src`](e2e/src) builds `verify_final` with transcript v2 as one circuit with one output wire.
+Each stage follows sp1-hypercube 6.9.0's `verify_shard` and the verifiers it calls:
+- **Preamble** ([`verifier.rs`](e2e/src/verifier.rs)): the pinned wrap key's transcript bytes, the
+  187 public values, the main commitment, the shape. The constant bytes come from SP1's own
+  `observe_into` code run on a recording challenger.
+- **LogUp-GKR**:
+  - grinding check;
+  - the output claims (nonzero denominators, Σ n/d = 0);
+  - 20 layer sumchecks;
+  - interaction fingerprints from the chip openings.
+- **Zerocheck**:
+  - the 21-round sumcheck;
+  - each of the 9 wrap-machine chips' AIR constraints, evaluated from SP1's own `eval` through a
+    symbolic builder. p3-uni-stark 0.4.3-succinct's builder labels preprocessed columns
+    `Entry::Main`; `SymBuilder` labels them correctly.
+- **Jagged PCS** ([`pcs.rs`](e2e/src/pcs.rs)):
+  - the modified-commitment checks;
+  - the 27-round sumcheck;
+  - the 56-round jagged-evaluation sumcheck, with its branching program and 122 constant prefix
+    sums.
+- **Stacked PCS and BaseFold**:
+  - the batch claim and the 21 BaseFold rounds;
+  - 94 queries, each with 2 component Merkle openings (depth 24) and 21 FRI rounds with
+    openings.
+  - x⁻¹ is computed as (g⁻¹)^rev(i), so FRI folding needs no field inversion.
+- **Statement** ([`full.rs`](e2e/src/full.rs)): exit code 0, complete, and the guest key digest,
+  recursion key root and committed-values digest equal to the pinned statement.
+  - The wrap key is a circuit constant.
+  - Every input field element is range-checked (< p).
+
+The shape (chips, heights, column counts, path depths) comes from the pinned proof and is fixed.
+Every proof value is an input. Values the native verifier recomputes and compares (sumcheck points
+and claims, LogUp evaluation point) are derived instead of read.
+
+| Measured on the committed proof (c4, transcript v2) | |
+| --- | ---: |
+| Non-free gates (= ciphertexts) | **785,442,492** |
+| Ciphertext per circuit at 16 bytes per gate | 12.6 GB |
+| Input bits (52,203 field elements, extension elements and digests) | 8,635,080 |
+| Plain execution, whole circuit (one thread, Windows) | 143 s |
+
+Against the estimates:
+- M13 priced this verifier at 1.21–1.97 × 10^9 gates from operation counts.
+- The built circuit is 785 M: 2.5× below M13's upper tier.
+- That is 14× below the upstream garbled Groth16 verifier (1.12 × 10^10).
+- It is 43× below M12's Poseidon2 figure.
+
+**Checks** ([`e2e/tests`](e2e/tests)):
+- `stages`: SP1 accepts the real proof natively, by its own `verify_logup_gkr` and
+  `verify_zerocheck`. The circuit's stages accept it too.
+  - Every byte the circuit transcript observes equals SP1's recorded transcript.
+  - Per chip, the circuit's constraint evaluation and padded-row adjustment equal SP1's
+    `eval_constraints` and `compute_padded_row_adjustment`.
+  - A changed opening is rejected.
+- `full`: `m13_verify::verify_final` accepts the committed proof, and so does the circuit. The
+  circuit rejects:
+  - a flipped Merkle path bit;
+  - a changed public value;
+  - a changed FRI row value;
+  - a non-canonical field encoding (x + p);
+  - the right proof under another pinned statement.
+- `full` (local, `M14_SECOND_PROOF_DIR`): a second guest's real proof (same wrap key and shape,
+  different values) is accepted by the circuit built from the committed proof's shape, under its
+  own statement.
+- `garbled`: the whole circuit garbled and evaluated.
+  - The garbler (AES half-gates, the repo's `GarbleMode`) streams its 785,442,492 ciphertexts
+    through a bounded channel to an evaluator running concurrently.
+  - The evaluator holds only the input labels of the proof's 8,635,080 bits.
+  - For the real proof, its output label is the garbler's label for accept; for a proof with one
+    flipped bit, the label for reject.
+  - Each garble-plus-evaluate run takes 209 s here.
+
+A diagnostic check list (`final_verifier_parts`) found one bug while this was built: SP1 folds
+each BaseFold message as m₀ + β·m₁, not by interpolation. The fix is in the history.
+
+### Guest A (the Nova verifier)
+
+The circuit does not depend on the guest. The wrap program, key and proof shape are the same for
+every guest, and the second-proof test confirms it on another guest's proof. A final proof of
+guest A, the complete Nova verifier from M12, goes through this exact circuit with A's two pins:
+- guest key `5df3760f…f46b`;
+- statement digest `d3b478b0…2fa0`.
+
+Both are in [`../m13/pins.json`](../m13/pins.json).
+
+**Not produced: guest A's compressed proof.** It was run here on 2026-11-07, with SP1 6.9.0's
+CPU prover, a 12 GiB RAM cap and 1.12 M-instruction shards (`ELEMENT_THRESHOLD=2^26`,
+`HEIGHT_THRESHOLD=2^20`):
+- execution checks passed (exit code 0, statement `d3b478b0…`);
+- steady proving was one shard every 165–189 s;
+- guest A executes 72.3 × 10^9 instructions, which is about 64,600 shards, or about 131 days on
+  this machine. The run was stopped.
+
+The GPU here (RTX 5080 Laptop, 16 GB) runs a training job, and SP1's CUDA prover needs about
+24 GB. The proof needs a 24 GB+ GPU, the prover network, or a much larger CPU host.
+
+With the compressed proof in hand:
+1. `run_full_a.sh` produces it (or reuse an existing compressed proof);
+2. `m13 shrink-wrap` / `wrap-only-v2` wraps it;
+3. `full::Known::new(proof, statement)` with A's statement verifies it.
 
 ## What is built
 

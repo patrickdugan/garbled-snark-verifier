@@ -23,10 +23,12 @@ use crate::native::{self, Shard, WrapChip, F};
 pub struct Inputs<'a> {
     w: &'a [W],
     at: usize,
+    /// Every field element read, for the canonical-encoding check (< p).
+    fes: Vec<Fe>,
 }
 impl<'a> Inputs<'a> {
     pub fn new(w: &'a [W]) -> Self {
-        Inputs { w, at: 0 }
+        Inputs { w, at: 0, fes: Vec::new() }
     }
     fn take(&mut self, n: usize) -> &'a [W] {
         let s = &self.w[self.at..self.at + n];
@@ -34,11 +36,17 @@ impl<'a> Inputs<'a> {
         s
     }
     pub fn fe(&mut self) -> Fe {
-        Fe::from_wires(self.take(f::BITS))
+        let x = Fe::from_wires(self.take(f::BITS));
+        self.fes.push(x.clone());
+        x
     }
     pub fn ext(&mut self) -> Ext {
-        let w = self.take(4 * f::BITS);
-        Ext(std::array::from_fn(|i| Fe::from_wires(&w[i * f::BITS..(i + 1) * f::BITS])))
+        Ext(std::array::from_fn(|_| self.fe()))
+    }
+    /// 1 iff every field element read so far is canonical (31 bits, < p).
+    pub fn all_canonical<C: CircuitContext>(&self, c: &mut C) -> W {
+        let oks: Vec<W> = self.fes.iter().map(|x| f::is_canonical(c, &x.0)).collect();
+        f::and_all(c, &oks)
     }
     pub fn digest(&mut self) -> Vec<W> {
         self.take(256).to_vec()

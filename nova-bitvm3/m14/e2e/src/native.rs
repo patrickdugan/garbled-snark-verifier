@@ -195,3 +195,66 @@ pub fn items_zerocheck(proof: &Shard) -> Vec<Item> {
     }
     v
 }
+
+/// Items of the PCS stage (jagged PCS, stacked PCS, BaseFold), in the circuit's order.
+pub fn items_pcs(proof: &Shard) -> Vec<Item> {
+    let mut v = Vec::new();
+    let ep = &proof.evaluation_proof;
+    for d in ep.merkle_tree_commitments.iter() {
+        let d: [u8; 32] = (*d).into();
+        v.push(Item::Digest(d));
+    }
+    for p in &ep.sumcheck_proof.univariate_polys {
+        v.extend(p.coefficients.iter().map(|x| Item::Ext(ef(*x))));
+    }
+    let je = &ep.jagged_eval_proof.partial_sumcheck_proof;
+    v.push(Item::Ext(ef(je.claimed_sum)));
+    for p in &je.univariate_polys {
+        v.extend(p.coefficients.iter().map(|x| Item::Ext(ef(*x))));
+    }
+    v.push(Item::Ext(ef(ep.expected_eval)));
+    let pcs = &ep.pcs_proof;
+    for r in pcs.batch_evaluations.iter() {
+        v.extend(r.iter().map(|x| Item::Ext(ef(*x))));
+    }
+    let b = &pcs.basefold_proof;
+    v.push(Item::Fe(fe(b.batch_grinding_witness)));
+    for (m, d) in b.univariate_messages.iter().zip(&b.fri_commitments) {
+        v.extend(m.iter().map(|x| Item::Ext(ef(*x))));
+        let d: [u8; 32] = (*d).into();
+        v.push(Item::Digest(d));
+    }
+    v.push(Item::Ext(ef(b.final_poly)));
+    v.push(Item::Fe(fe(b.pow_witness)));
+    for o in b.component_polynomials_query_openings_and_proofs.iter().chain(&b.query_phase_openings_and_proofs) {
+        let root: [u8; 32] = o.proof.merkle_root.into();
+        v.push(Item::Digest(root));
+        let width = o.proof.width;
+        let vals = o.values.as_slice();
+        let paths = o.proof.paths.as_slice();
+        let depth = o.proof.log_tensor_height;
+        for q in 0..vals.len() / width {
+            v.extend(vals[q * width..(q + 1) * width].iter().map(|x| Item::Fe(fe(*x))));
+            for d in &paths[q * depth..(q + 1) * depth] {
+                let d: [u8; 32] = (*d).into();
+                v.push(Item::Digest(d));
+            }
+        }
+    }
+    v
+}
+
+/// The leaf hash (`ctx::LeafHasher`) of constant field elements.
+pub fn leaf_hash_const(xs: &[usize]) -> [u8; 32] {
+    use slop_symmetric::CryptographicHasher;
+    CryptographicHasher::<F, [u8; 32]>::hash_iter(&ctx::LeafHasher, xs.iter().map(|x| F::from_canonical_usize(*x)))
+}
+pub fn two_adic_generator(bits: usize) -> u32 {
+    use slop_algebra::TwoAdicField;
+    fe(F::two_adic_generator(bits))
+}
+
+pub fn inverse(x: u32) -> u32 {
+    use slop_algebra::Field;
+    fe(F::from_canonical_u32(x).inverse())
+}

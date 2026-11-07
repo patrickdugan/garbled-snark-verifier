@@ -2,4 +2,6 @@
 //! garbled circuit, built from `m14-circuit` gadgets and checked stage by stage against SP1's own
 //! verifier on real proofs.
 pub mod native;
+pub mod full;
+pub mod pcs;
 pub mod verifier;

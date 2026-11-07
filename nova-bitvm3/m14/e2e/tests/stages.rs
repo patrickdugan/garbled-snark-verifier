@@ -237,3 +237,38 @@ fn zerocheck_matches_sp1_on_the_real_proof() {
     let (_, ok_bad, _, _) = run(&bad);
     assert!(!ok_bad, "changed zerocheck input accepted");
 }
+
+#[test]
+#[ignore]
+fn print_pcs_shape() {
+    let proof = native::load(native::FIXTURE_V2);
+    let ep = &proof.proof.evaluation_proof;
+    eprintln!("row_counts_and_column_counts {:?}", ep.row_counts_and_column_counts);
+    eprintln!("log_m {} max_log_row_count {}", ep.log_m, ep.max_log_row_count);
+    eprintln!("jagged sumcheck rounds {} deg {}", ep.sumcheck_proof.univariate_polys.len(), ep.sumcheck_proof.univariate_polys[0].coefficients.len() - 1);
+    let je = &ep.jagged_eval_proof.partial_sumcheck_proof;
+    eprintln!("jagged eval sumcheck rounds {} deg {}", je.univariate_polys.len(), je.univariate_polys[0].coefficients.len() - 1);
+    let pcs = serde_json::to_value(&ep.pcs_proof).unwrap();
+    let keys: Vec<String> = pcs.as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default();
+    eprintln!("pcs proof fields {keys:?}");
+    eprintln!("pcs proof json bytes {}", serde_json::to_string(&ep.pcs_proof).unwrap().len());
+}
+
+#[test]
+#[ignore]
+fn print_basefold_shape() {
+    let proof = native::load(native::FIXTURE_V2);
+    let ep = &proof.proof.evaluation_proof;
+    let sv = m13_verify::wrap_verifier_v2();
+    let bf = &sv.shard_verifier().jagged_pcs_verifier.pcs_verifier.basefold_verifier;
+    eprintln!("fri log_blowup {} queries {} pow {}", bf.fri_config.log_blowup(), bf.fri_config.num_queries, bf.fri_config.proof_of_work_bits);
+    let p = &ep.pcs_proof;
+    eprintln!("batch evaluation lens {:?}", p.batch_evaluations.iter().map(|r| r.num_evaluations()).collect::<Vec<_>>());
+    let b = &p.basefold_proof;
+    eprintln!("univariate messages {} fri commitments {}", b.univariate_messages.len(), b.fri_commitments.len());
+    for o in &b.component_polynomials_query_openings_and_proofs {
+        eprintln!("component values {:?} paths {:?} log_h {} width {}", o.values.sizes(), o.proof.paths.sizes(), o.proof.log_tensor_height, o.proof.width);
+    }
+    let q0 = &b.query_phase_openings_and_proofs[0];
+    eprintln!("query phase rounds {} first: values {:?} paths {:?} log_h {} width {}", b.query_phase_openings_and_proofs.len(), q0.values.sizes(), q0.proof.paths.sizes(), q0.proof.log_tensor_height, q0.proof.width);
+}
