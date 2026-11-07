@@ -32,7 +32,7 @@ so the circuit's gate count reflects which operands are actually constant.
 
 ## Checks
 
-[`circuit/tests/gadgets.rs`](circuit/tests/gadgets.rs), 10 tests:
+[`circuit/tests/gadgets.rs`](circuit/tests/gadgets.rs), 11 tests:
 - **Against SP1's own types** (`p3-koala-bear 0.4.3-succinct`, `BinomialExtensionField<KoalaBear, 4>`):
   - every base and extension gadget on edge values (0, 1, p - 1, (p ± 1)/2, 2^24, 2^30, the
     extension's d-th root) and random inputs;
@@ -41,6 +41,14 @@ so the circuit's gate count reflects which operands are actually constant.
 - **Against the `blake3` crate:** BLAKE3 of 0 to 5,000 bytes (1 to 5 chunks).
 - **Against M13's transcript:** a native copy of `Blake3Transcript` runs an 11-step
   observe/sample script, including a 1,100-byte absorb and a 33-byte squeeze across a re-hash.
+- **Against real verifications:** `m13-verify` with `M13_TRANSCRIPT_TRACE` records every byte
+  its transcript observes and samples while verifying the c4 final proof. The recordings are in
+  [`circuit/fixtures/c4-v1-transcript.bin`](circuit/fixtures) and `c4-v2-transcript.bin`:
+  - v1: 39,568 bytes observed, 8,836 sampled;
+  - v2: 39,568 bytes observed, 17,124 sampled.
+
+  Given the observed bytes, the circuit transcript produces every sampled byte of both. This
+  exact transcript of the final verifier costs 11,198,078 gates under v2 (10,916,094 under v1).
 - **Merkle paths:**
   - roots match a native BLAKE3 tree;
   - a flipped sibling bit or a wrong root is rejected.
@@ -80,6 +88,8 @@ Non-free (AND-class) gates; XOR and NOT are free.
 | challenge, extension | 1,856 | — |
 | BLAKE3, one 64-byte block (Merkle node, 16-element leaf) | 10,281 | 10,410 |
 | BLAKE3, 1,025 bytes (18 compressions) | 183,385 | 187,380 |
+| **Transcript of the c4 final verification, v2** (1,177 compressions) | **11,198,078** | 12,252,570 (1,177 × 10,410) |
+| Transcript of the c4 final verification, v1 (1,144 compressions) | 10,916,094 | 11,909,040 |
 
 ## Decisions
 
@@ -118,8 +128,11 @@ v2 takes 8 bytes per base-field challenge and reduces the little-endian u64 mod 
   ([`../m13/results/verify-counts-c4-v2.json`](../m13/results/verify-counts-c4-v2.json)), against
   1,144 in 504 for v1.
 
-The circuit's sampler is checked against v2's native definition (`ctx::sample_base_v2`'s
-formula). The circuit transcript is not yet run against a recorded v2 verification.
+Two checks tie the circuit to v2:
+- the circuit's sampler is checked against v2's native formula (`ctx::sample_base_v2`);
+- the circuit transcript reproduces the recorded v2 verification byte for byte (above).
+
+Which sampled bytes become which field challenge is fixed by the verifier logic (step 3).
 
 **Constant multiplications.** M13's operation counter classified a multiplication as
 "small-constant" from its runtime operand values. In the circuit, only compile-time constants are

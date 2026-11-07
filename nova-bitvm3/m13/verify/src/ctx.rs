@@ -170,6 +170,7 @@ impl Blake3Transcript {
 
 impl CanObserve<u8> for Blake3Transcript {
     fn observe(&mut self, value: u8) {
+        trace_byte(false, value);
         self.output_buffer.clear();
         self.input_buffer.push(value);
     }
@@ -180,8 +181,41 @@ impl CanSample<u8> for Blake3Transcript {
         if self.output_buffer.is_empty() {
             self.flush();
         }
-        self.output_buffer.pop().expect("output buffer is non-empty after a flush")
+        let b = self.output_buffer.pop().expect("output buffer is non-empty after a flush");
+        trace_byte(true, b);
+        b
     }
+}
+
+/// Transcript trace: every byte observed (false) or sampled (true), in order, across all
+/// `Blake3Transcript`s of the process. Off unless [`trace_start`] was called; M14 replays it
+/// through the circuit transcript.
+static TRACE: std::sync::Mutex<Option<Vec<(bool, u8)>>> = std::sync::Mutex::new(None);
+
+fn trace_byte(sampled: bool, b: u8) {
+    if let Some(t) = TRACE.lock().unwrap().as_mut() {
+        t.push((sampled, b));
+    }
+}
+
+pub fn trace_start() {
+    *TRACE.lock().unwrap() = Some(Vec::new());
+}
+
+/// The recorded trace as runs: `kind` byte (0 observe, 1 sample), u32 LE length, the bytes.
+pub fn trace_take_runs() -> Vec<u8> {
+    let events = TRACE.lock().unwrap().take().unwrap_or_default();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < events.len() {
+        let kind = events[i].0;
+        let j = events[i..].iter().position(|e| e.0 != kind).map_or(events.len(), |k| i + k);
+        out.push(kind as u8);
+        out.extend(((j - i) as u32).to_le_bytes());
+        out.extend(events[i..j].iter().map(|e| e.1));
+        i = j;
+    }
+    out
 }
 
 pub type Blake3Challenger = SerializingChallenger32<SP1Field, Blake3Transcript>;

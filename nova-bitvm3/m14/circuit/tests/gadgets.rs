@@ -140,6 +140,23 @@ enum Op {
     LeafHash(usize),
     /// (row length, depth): row, index bits, siblings, expected root -> computed root, match bit.
     MerklePath(usize, usize),
+    /// Replay of a recorded transcript of a real verification (1 = v1, 2 = v2 fixture):
+    /// all observed bytes in, all sampled bytes out.
+    Trace(u8),
+}
+
+/// A recorded transcript (`m13-verify` with `M13_TRANSCRIPT_TRACE`): runs of (sampled?, bytes).
+fn trace_runs(v: u8) -> Vec<(bool, Vec<u8>)> {
+    let path = format!("{}/fixtures/c4-v{v}-transcript.bin", env!("CARGO_MANIFEST_DIR"));
+    let raw = std::fs::read(path).expect("transcript fixture");
+    let (mut at, mut runs) = (0, Vec::new());
+    while at < raw.len() {
+        let kind = raw[at] == 1;
+        let n = u32::from_le_bytes(raw[at + 1..at + 5].try_into().unwrap()) as usize;
+        runs.push((kind, raw[at + 5..at + 5 + n].to_vec()));
+        at += 5 + n;
+    }
+    runs
 }
 
 const FB: usize = f::BITS;
@@ -190,6 +207,7 @@ impl Op {
             Script => 8 * script_lens().0,
             LeafHash(n) => n * FB,
             MerklePath(n, d) => n * FB + d + 256 * d + 256,
+            Trace(v) => 8 * trace_runs(v).iter().filter(|r| !r.0).map(|r| r.1.len()).sum::<usize>(),
         }
     }
     fn build<C: garbled_snark_verifier::CircuitContext>(self, c: &mut C, w: &[WireId]) -> Vec<WireId> {
@@ -245,6 +263,19 @@ impl Op {
             LeafHash(n) => {
                 let row: Vec<Fe> = (0..n).map(fe).collect();
                 hash::leaf_hash(c, &row)
+            }
+            Trace(v) => {
+                let mut t = hash::Transcript::new(if v == 1 { hash::DOMAIN_V1 } else { hash::DOMAIN_V2 });
+                let (mut at, mut out) = (0, Vec::new());
+                for (sampled, bytes) in trace_runs(v) {
+                    if sampled {
+                        out.extend(t.sample_bytes(c, bytes.len()));
+                    } else {
+                        t.observe_bytes(&w[8 * at..8 * (at + bytes.len())]);
+                        at += bytes.len();
+                    }
+                }
+                out
             }
             MerklePath(n, d) => {
                 let row: Vec<Fe> = (0..n).map(fe).collect();
@@ -558,6 +589,21 @@ fn transcript_matches_m13_semantics() {
     }
 }
 
+/// The transcripts of the two real verifications of the c4 final proof (v1 and v2 fixtures in
+/// nova-bitvm3/m13/fixtures), recorded byte by byte by `m13-verify`: given every observed byte,
+/// the circuit transcript produces every sampled byte.
+#[test]
+fn transcript_replays_real_verifications() {
+    for v in [1u8, 2] {
+        let runs = trace_runs(v);
+        let observed: Vec<u8> = runs.iter().filter(|r| !r.0).flat_map(|r| r.1.clone()).collect();
+        let sampled: Vec<u8> = runs.iter().filter(|r| r.0).flat_map(|r| r.1.clone()).collect();
+        // Same proof shape, so the same observed bytes; v2 samples 8 bytes per field challenge.
+        assert_eq!((observed.len(), sampled.len()), if v == 1 { (39_568, 8_836) } else { (39_568, 17_124) });
+        assert_eq!(bits_bytes(&exec(Op::Trace(v), bytes_bits(&observed))), sampled, "v{v} transcript");
+    }
+}
+
 fn native_leaf(row: &[u32]) -> [u8; 32] {
     let bytes: Vec<u8> = row.iter().flat_map(|x| x.to_le_bytes()).collect();
     *blake3::hash(&bytes).as_bytes()
@@ -678,6 +724,8 @@ fn measured() -> BTreeMap<String, u64> {
     put("leaf_hash_row_of_16", Op::LeafHash(16));
     put("merkle_path_depth_4_row_of_5_with_root_check", Op::MerklePath(5, 4));
     put("transcript_script", Op::Script);
+    put("transcript_c4_v1_real_verification", Op::Trace(1));
+    put("transcript_c4_v2_real_verification", Op::Trace(2));
     m
 }
 

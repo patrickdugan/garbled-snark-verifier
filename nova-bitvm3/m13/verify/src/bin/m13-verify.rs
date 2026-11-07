@@ -3,6 +3,8 @@
 //!     The complete final verifier, run once on one thread: wall time,
 //!     BLAKE3 compressions per role and (with the `opcount` feature and
 //!     patched p3-koala-bear) every KoalaBear operation.
+//!     M13_TRANSCRIPT_TRACE=PATH writes every transcript byte observed or
+//!     sampled, in order (`ctx::trace_take_runs` format).
 use std::{collections::BTreeMap, time::Instant};
 
 use anyhow::{bail, ensure, Result};
@@ -34,6 +36,10 @@ where
     let wrap: SP1WrapProof<GC, SP1PcsProof<GC>> = bincode::deserialize(&bytes)?;
     let expect: FinalStatement = serde_json::from_slice(&std::fs::read(expect_path)?)?;
     let proof_bytes = bincode::serialize(&wrap.proof)?.len();
+    let trace_path = std::env::var("M13_TRANSCRIPT_TRACE").ok();
+    if trace_path.is_some() {
+        ctx::trace_start();
+    }
     ctx::reset_counters();
     opcount::reset();
     let t = Instant::now();
@@ -42,6 +48,9 @@ where
         Err(e) => bail!("refused: {e:#}"),
     };
     let secs = t.elapsed().as_secs_f64();
+    if let Some(p) = trace_path {
+        std::fs::write(&p, ctx::trace_take_runs())?;
+    }
     let ops = opcount::snapshot();
     let counts = ctx::read_counters();
     let by_role: BTreeMap<_, _> = ctx::ROLE_NAMES.iter().zip(counts.iter()).map(|(k, v)| (*k, *v)).collect();
