@@ -1,0 +1,30 @@
+name: Nova nb3-prover (resumable SP1 proving)
+on:
+  push:
+    branches: ['main', 'feat/nova-bitvm3-*']
+    paths: ['nova-bitvm3/prover/**', '.github/workflows/nova-prover.yml']
+  pull_request:
+    paths: ['nova-bitvm3/prover/**', '.github/workflows/nova-prover.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nova-prover-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  units:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: '4'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          rustc +1.90.0 --version
+      - name: Build nb3-prove
+        run: cargo +1.90.0 build --release --locked --manifest-path nova-bitvm3/prover/Cargo.toml
+      - name: Store, memo keys, deferred-chunk capture, run configuration
+        run: cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/prover/Cargo.toml --test units -- --nocapture
