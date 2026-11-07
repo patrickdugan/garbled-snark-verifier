@@ -9,18 +9,17 @@ use std::{fmt::Debug, path::Path, sync::Arc, time::Duration, time::Instant};
 
 use anyhow::{anyhow, Result};
 use sp1_core_executor::{SP1Context, SP1CoreOpts};
-use sp1_core_machine::{io::SP1Stdin, riscv::RiscvAir};
-use sp1_hypercube::prover::{CpuShardProver, ProverSemaphore};
+use sp1_core_machine::io::SP1Stdin;
 use sp1_prover::{
     worker::{
         CoreExecuteTaskRequest, LocalWorkerClient, ProofFromNetwork, ProofId, RawTaskRequest, RequesterId,
-        SP1NodeCore, SP1WorkerBuilder, TaskContext, TaskError, TaskId, TaskMetadata, WorkerClient,
+        SP1NodeCore, SP1Worker, SP1WorkerBuilder, TaskContext, TaskError, TaskId, TaskMetadata, WorkerClient,
     },
-    CpuSP1ProverComponents, CpuWrapProverBuilder, SP1ProverComponents, SP1VerifyingKey,
+    SP1ProverComponents, SP1VerifyingKey,
 };
-use sp1_prover_types::{ArtifactId,
-    network_base_types::ProofMode, Artifact, ArtifactClient, ArtifactType, ProofArtifacts, ProofRequestStatus,
-    TaskStatus, TaskType,
+use sp1_prover_types::{
+    network_base_types::ProofMode, Artifact, ArtifactClient, ArtifactId, ArtifactType, ProofArtifacts,
+    ProofRequestStatus, TaskStatus, TaskType,
 };
 use tokio::{sync::mpsc, task::JoinSet};
 
@@ -28,8 +27,6 @@ use crate::{
     memo::{capture_shard, Entry, Kind, Memo},
     store::DiskArtifactClient,
 };
-
-type Worker = sp1_prover::worker::SP1Worker<DiskArtifactClient, LocalWorkerClient, CpuSP1ProverComponents>;
 
 pub struct ShardedNode {
     pub store: DiskArtifactClient,
@@ -39,35 +36,24 @@ pub struct ShardedNode {
     _tasks: JoinSet<()>,
 }
 
-/// Grace period during which deleted artifacts stay readable (see `store.rs`).
-const TRASH_GRACE: Duration = Duration::from_secs(600);
+/// Minimum time deleted artifacts stay readable (see `store.rs`).
+const TRASH_GRACE: Duration = Duration::from_secs(120);
 
 impl ShardedNode {
-    pub async fn build(run_dir: &Path, memo: Arc<Memo>, opts: SP1CoreOpts, permits: usize) -> Result<Self> {
-        let machine = RiscvAir::machine();
+    /// Builds the node from a worker builder whose provers are set (see [`crate::backend`]).
+    pub async fn build<C: SP1ProverComponents>(
+        run_dir: &Path,
+        memo: Arc<Memo>,
+        opts: SP1CoreOpts,
+        builder: SP1WorkerBuilder<C>,
+    ) -> Result<Self> {
         let index = ProofArtifacts::default();
         let store = DiskArtifactClient::open(&run_dir.join("artifacts"), index.clone())?;
         store.spawn_trash_sweeper(TRASH_GRACE);
         let (worker_client, mut channels) = LocalWorkerClient::init_with_index(index);
 
-        let prover_permits = ProverSemaphore::new(permits);
-        let core_verifier = CpuSP1ProverComponents::core_verifier(machine.clone());
-        let core_prover = Arc::new(CpuShardProver::new(core_verifier.shard_verifier().clone()));
-        let compress_verifier = CpuSP1ProverComponents::compress_verifier();
-        let compress_prover = Arc::new(CpuShardProver::new(compress_verifier.shard_verifier().clone()));
-        let shrink_verifier = CpuSP1ProverComponents::shrink_verifier();
-        let shrink_prover = Arc::new(CpuShardProver::new(shrink_verifier.shard_verifier().clone()));
-
-        let worker: Worker = SP1WorkerBuilder::<CpuSP1ProverComponents>::new_with_machine(machine)
-            .with_artifact_client(store.clone())
-            .with_worker_client(worker_client.clone())
-            .with_core_opts(opts.clone())
-            .with_core_air_prover(core_prover, prover_permits.clone())
-            .with_compress_air_prover(compress_prover, prover_permits.clone())
-            .with_shrink_air_prover(shrink_prover, prover_permits.clone())
-            .with_wrap_air_prover(CpuWrapProverBuilder, prover_permits)
-            .build()
-            .await?;
+        let worker: SP1Worker<DiskArtifactClient, LocalWorkerClient, C> =
+            builder.with_artifact_client(store.clone()).with_worker_client(worker_client.clone()).build().await?;
 
         let mut tasks = JoinSet::new();
         let mut take = |t: TaskType| channels.task_receivers.remove(&t).ok_or_else(|| anyhow!("no receiver for {t:?}"));

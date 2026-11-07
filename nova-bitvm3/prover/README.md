@@ -23,6 +23,11 @@ It is SP1's own prover (controller, executor, shard provers, recursion), assembl
 The output is SP1's `SP1ProofWithPublicValues`, verified before it is written. M13's
 `m13 shrink-wrap` takes it unchanged.
 
+The node takes its provers from a [`Backend`](src/backend.rs). `nb3-prove` uses SP1's CPU
+provers; [`nb3-prove-gpu`](../prover-gpu/README.md) runs the same node, command line and run
+directories on SP1's CUDA provers, sized for GPUs below SP1's 24 GB floor. A run directory can be
+resumed with either.
+
 ## Usage
 
 ```

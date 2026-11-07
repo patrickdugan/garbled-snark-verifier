@@ -5,6 +5,8 @@
 //!   the same command replays them instead of proving them again.
 //! - [`node::ShardedNode`]: an SP1 node over both (SP1's own controller, executor and provers).
 //! - [`config::RunConfig`]: everything that decides the shards, pinned per run directory.
+pub mod backend;
+pub mod cli;
 pub mod config;
 pub mod memo;
 pub mod node;
