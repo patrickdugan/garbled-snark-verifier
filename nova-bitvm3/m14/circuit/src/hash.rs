@@ -112,12 +112,20 @@ pub struct Transcript {
     output: Vec<Vec<W>>,
     /// Compression calls spent so far (fixed by the shape).
     pub compressions: u64,
+    /// Every observed byte (8 wires each), in order: lets tests compare a stage's observations
+    /// with a recorded native transcript. Wiring only.
+    pub log: Vec<W>,
 }
 
 impl Transcript {
     /// Starts from constant bytes (the domain separator).
     pub fn new(initial: &[u8]) -> Self {
-        Transcript { input: initial.iter().flat_map(|b| g::const_bits(*b as u128, 8)).collect(), output: Vec::new(), compressions: 0 }
+        Transcript {
+            input: initial.iter().flat_map(|b| g::const_bits(*b as u128, 8)).collect(),
+            output: Vec::new(),
+            compressions: 0,
+            log: Vec::new(),
+        }
     }
     pub fn observe_bytes(&mut self, bytes: &[W]) {
         assert_eq!(bytes.len() % 8, 0);
@@ -125,6 +133,7 @@ impl Transcript {
             self.output.clear();
         }
         self.input.extend_from_slice(bytes);
+        self.log.extend_from_slice(bytes);
     }
     /// `observe(F)`: 4 little-endian bytes of the canonical value.
     pub fn observe_fe(&mut self, x: &Fe) {
