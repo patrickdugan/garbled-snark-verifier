@@ -18,6 +18,7 @@ use m14_circuit::{
     ext::{self, DTH_ROOT, Ext},
     field::{self as f, Fe, P},
     hash,
+    sumcheck,
     sample,
 };
 use p3_field::{
@@ -143,6 +144,8 @@ enum Op {
     /// Replay of a recorded transcript of a real verification (1 = v1, 2 = v2 fixture):
     /// all observed bytes in, all sampled bytes out.
     Trace(u8),
+    /// Sumcheck round checks (rounds, degree): claimed sum, polynomials, alphas -> ok, evaluation.
+    SumcheckRounds(usize, usize),
 }
 
 /// A recorded transcript (`m13-verify` with `M13_TRANSCRIPT_TRACE`): runs of (sampled?, bytes).
@@ -208,6 +211,7 @@ impl Op {
             LeafHash(n) => n * FB,
             MerklePath(n, d) => n * FB + d + 256 * d + 256,
             Trace(v) => 8 * trace_runs(v).iter().filter(|r| !r.0).map(|r| r.1.len()).sum::<usize>(),
+            SumcheckRounds(r, d) => (4 + r * (d + 1) * 4 + r * 4) * FB,
         }
     }
     fn build<C: garbled_snark_verifier::CircuitContext>(self, c: &mut C, w: &[WireId]) -> Vec<WireId> {
@@ -263,6 +267,15 @@ impl Op {
             LeafHash(n) => {
                 let row: Vec<Fe> = (0..n).map(fe).collect();
                 hash::leaf_hash(c, &row)
+            }
+            SumcheckRounds(r, d) => {
+                let claim = ex(0);
+                let polys: Vec<Vec<Ext>> = (0..r).map(|i| (0..=d).map(|k| ex(1 + i * (d + 1) + k)).collect()).collect();
+                let alphas: Vec<Ext> = (0..r).map(|i| ex(1 + r * (d + 1) + i)).collect();
+                let (ok, eval) = sumcheck::check_rounds(c, &claim, &polys, &alphas);
+                let mut out = vec![ok];
+                out.extend(ext_wires(&eval));
+                out
             }
             Trace(v) => {
                 let mut t = hash::Transcript::new(if v == 1 { hash::DOMAIN_V1 } else { hash::DOMAIN_V2 });
@@ -604,6 +617,50 @@ fn transcript_replays_real_verifications() {
     }
 }
 
+/// The c4 v2 proof's zerocheck sumcheck (`m13-verify dump-zerocheck-v2`): (claimed sum,
+/// polynomials, point in SP1's order, evaluation).
+fn zerocheck_fixture() -> ([u32; 4], Vec<Vec<[u32; 4]>>, Vec<[u32; 4]>, [u32; 4]) {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/c4-v2-zerocheck.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let e = |x: &serde_json::Value| -> [u32; 4] { serde_json::from_value(x["value"].clone()).unwrap() };
+    let polys = v["univariate_polys"].as_array().unwrap().iter().map(|p| p["coefficients"].as_array().unwrap().iter().map(e).collect()).collect();
+    let point = v["point_and_eval"][0]["values"].as_array().unwrap().iter().map(e).collect();
+    (e(&v["claimed_sum"]), polys, point, e(&v["point_and_eval"][1]))
+}
+
+#[test]
+fn sumcheck_rounds_accept_the_real_zerocheck() {
+    let (claim, polys, point, eval) = zerocheck_fixture();
+    let (r, d) = (polys.len(), polys[0].len() - 1);
+    assert_eq!((r, d), (21, 4));
+    // SP1 inserts each alpha at the front of the point: sampling order is the reverse.
+    let alphas: Vec<[u32; 4]> = point.iter().rev().copied().collect();
+    let input = |claim: [u32; 4], polys: &[Vec<[u32; 4]>]| -> Vec<bool> {
+        let mut xs = vec![claim];
+        polys.iter().for_each(|p| xs.extend(p.iter().copied()));
+        xs.extend(alphas.iter().copied());
+        xs.iter().flat_map(|x| fe_bits(x)).collect()
+    };
+    // native cross-check with SP1's extension type
+    let ev = |p: &[[u32; 4]], x: EF| p.iter().rev().fold(EF::zero(), |acc, k| acc * x + ef(*k));
+    let s01 = |p: &[[u32; 4]]| ef(p[0]) + p.iter().map(|k| ef(*k)).sum::<EF>();
+    assert_eq!(s01(&polys[0]), ef(claim));
+    for i in 1..r {
+        assert_eq!(ev(&polys[i - 1], ef(alphas[i - 1])), s01(&polys[i]));
+    }
+    assert_eq!(ev(&polys[r - 1], ef(alphas[r - 1])), ef(eval));
+
+    let out = exec(Op::SumcheckRounds(r, d), input(claim, &polys));
+    assert!(out[0], "real zerocheck rounds rejected");
+    assert_eq!(out_fes(&out[1..]), eval.to_vec(), "final evaluation");
+    let mut bad = polys.clone();
+    bad[7][2][1] = (bad[7][2][1] + 1) % P;
+    assert!(!exec(Op::SumcheckRounds(r, d), input(claim, &bad))[0], "changed coefficient accepted");
+    let mut c2 = claim;
+    c2[0] = (c2[0] + 1) % P;
+    assert!(!exec(Op::SumcheckRounds(r, d), input(c2, &polys))[0], "changed claim accepted");
+}
+
 fn native_leaf(row: &[u32]) -> [u8; 32] {
     let bytes: Vec<u8> = row.iter().flat_map(|x| x.to_le_bytes()).collect();
     *blake3::hash(&bytes).as_bytes()
@@ -677,6 +734,14 @@ fn garble_then_evaluate() {
         }
     }
     assert_eq!(bits_bytes(&garble_evaluate(Op::Script, bytes_bits(&observed))), want);
+    // the real zerocheck sumcheck of the c4 v2 proof: accepted, with SP1's final evaluation
+    let (claim, polys, point, eval) = zerocheck_fixture();
+    let mut xs = vec![claim];
+    polys.iter().for_each(|p| xs.extend(p.iter().copied()));
+    xs.extend(point.iter().rev().copied());
+    let out = garble_evaluate(Op::SumcheckRounds(21, 4), xs.iter().flat_map(|x| fe_bits(x)).collect());
+    assert!(out[0]);
+    assert_eq!(out_fes(&out[1..]), eval.to_vec());
 }
 
 // ------------------------------------------------------------------ gate counts
@@ -726,6 +791,7 @@ fn measured() -> BTreeMap<String, u64> {
     put("transcript_script", Op::Script);
     put("transcript_c4_v1_real_verification", Op::Trace(1));
     put("transcript_c4_v2_real_verification", Op::Trace(2));
+    put("sumcheck_rounds_21_degree4_zerocheck_shape", Op::SumcheckRounds(21, 4));
     m
 }
 

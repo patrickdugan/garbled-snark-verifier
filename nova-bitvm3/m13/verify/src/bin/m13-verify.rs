@@ -5,6 +5,8 @@
 //!     patched p3-koala-bear) every KoalaBear operation.
 //!     M13_TRANSCRIPT_TRACE=PATH writes every transcript byte observed or
 //!     sampled, in order (`ctx::trace_take_runs` format).
+//! m13-verify dump-zerocheck-v2 WRAP.bin OUT.json
+//!     The v2 proof's zerocheck sumcheck as JSON (M14 test data).
 use std::{collections::BTreeMap, time::Instant};
 
 use anyhow::{bail, ensure, Result};
@@ -23,7 +25,13 @@ fn main() -> Result<()> {
     match a[1].as_str() {
         "verify" => run::<Blake3KoalaBear>(&a[2], &a[3]),
         "verify-v2" => run::<Blake3KoalaBearV2>(&a[2], &a[3]),
-        _ => bail!("usage: m13-verify verify|verify-v2 WRAP.bin EXPECT.json"),
+        "dump-zerocheck-v2" => {
+            // The proof's zerocheck sumcheck (claimed sum, round polynomials, point, evaluation).
+            let wrap: m13_verify::Blake3WrapProofV2 = bincode::deserialize(&std::fs::read(&a[2])?)?;
+            std::fs::write(&a[3], serde_json::to_string(&wrap.proof.zerocheck_proof)? + "\n")?;
+            Ok(())
+        }
+        _ => bail!("usage: m13-verify verify|verify-v2 WRAP.bin EXPECT.json | dump-zerocheck-v2 WRAP.bin OUT.json"),
     }
 }
 

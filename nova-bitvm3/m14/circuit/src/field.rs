@@ -88,7 +88,7 @@ pub fn or_all<C: CircuitContext>(c: &mut C, ws: &[W]) -> W {
     while layer.len() > 1 {
         let mut next = Vec::with_capacity(layer.len().div_ceil(2));
         for pair in layer.chunks(2) {
-            next.push(if pair.len() == 2 { or(c, pair[0], pair[1]) } else { pair[0] });
+            next.push(if pair.len() == 2 && pair[0] != pair[1] { or(c, pair[0], pair[1]) } else { pair[0] });
         }
         layer = next;
     }
@@ -102,7 +102,7 @@ pub fn and_all<C: CircuitContext>(c: &mut C, ws: &[W]) -> W {
     while layer.len() > 1 {
         let mut next = Vec::with_capacity(layer.len().div_ceil(2));
         for pair in layer.chunks(2) {
-            next.push(if pair.len() == 2 { g::and(c, pair[0], pair[1]) } else { pair[0] });
+            next.push(if pair.len() == 2 && pair[0] != pair[1] { g::and(c, pair[0], pair[1]) } else { pair[0] });
         }
         layer = next;
     }
@@ -120,12 +120,28 @@ pub fn is_canonical<C: CircuitContext>(c: &mut C, x: &[W]) -> W {
     g::not(c, ge)
 }
 
+/// a + b. Adding an element to itself is `double`: the ripple adder on two identical operands
+/// would build AND gates whose two inputs are one wire.
 pub fn add<C: CircuitContext>(c: &mut C, a: &Fe, b: &Fe) -> Fe {
+    if a.0 == b.0 {
+        return double(c, a);
+    }
+    // Adding constant 0 is the identity. The reduction of 0 + b would also build an AND of a
+    // carry and its own negation (ExecuteMode counts it, the garbler emits no ciphertext for it).
+    if a.as_constant() == Some(0) {
+        return b.clone();
+    }
+    if b.as_constant() == Some(0) {
+        return a.clone();
+    }
     Fe(KOALA.add_mod(c, &a.0, &b.0))
 }
 
 /// a - b: the 31-bit difference, plus p when it borrowed.
 pub fn sub<C: CircuitContext>(c: &mut C, a: &Fe, b: &Fe) -> Fe {
+    if a.0 == b.0 {
+        return Fe::zero();
+    }
     let (d, ge) = g::sub(c, &a.0, &b.0, BITS);
     let dp = g::add(c, &d, &g::const_bits(P as u128, BITS), BITS);
     Fe((0..BITS).map(|i| g::mux(c, ge, dp[i], d[i])).collect())

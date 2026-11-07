@@ -6,5 +6,6 @@ pub mod ext;
 pub mod field;
 pub mod hash;
 pub mod sample;
+pub mod sumcheck;
 
 pub use m12_gates::W;

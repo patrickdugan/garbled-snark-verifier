@@ -37,6 +37,7 @@
     "reduce_wide_66": 486,
     "sample_base_v2_u64_mod_p": 464,
     "sample_ext_v2": 1856,
+    "sumcheck_rounds_21_degree4_zerocheck_shape": 2600555,
     "transcript_c4_v1_real_verification": 10916094,
     "transcript_c4_v2_real_verification": 11198078,
     "transcript_script": 249053

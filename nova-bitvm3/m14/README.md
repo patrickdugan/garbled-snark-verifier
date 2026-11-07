@@ -12,7 +12,8 @@ Order of work:
    sumchecks), the statement and pin checks;
 4. the whole circuit run on the committed proof and on mutated proofs, against `m13-verify`.
 
-Steps 1 and 2 are in [`circuit/`](circuit). Steps 3 and 4 are not built yet.
+Steps 1 and 2 are in [`circuit/`](circuit). Step 3 has its first sub-verifier, the sumcheck that
+the zerocheck, LogUp-GKR and the jagged PCS all use. Step 4 is not built yet.
 
 ## What is built
 
@@ -26,13 +27,20 @@ Steps 1 and 2 are in [`circuit/`](circuit). Steps 3 and 4 are not built yet.
 - `sample.rs`: fixed-cost challenge sampling (see below).
 - `hash.rs`: BLAKE3 of any fixed length (chunks, flags, counters, parent tree), M13's byte
   transcript, Merkle leaf and node hashing, path roots and digest equality.
+- `sumcheck.rs`: `slop_sumcheck::partially_verify_sumcheck_proof`.
+  - It checks p_0(0) + p_0(1) against the claim, then p_{i-1}(α_{i-1}) = p_i(0) + p_i(1) for
+    each later round.
+  - It observes each polynomial, then samples the next α (v2).
+  - The proof's point and final evaluation are derived, not taken as input. SP1 builds the
+    point with each α inserted at the front, and a proof whose copies differ is one the native
+    verifier rejects. The derived copies save their input labels.
 
 A multiplication whose operand is a compile-time constant takes the constant path automatically,
 so the circuit's gate count reflects which operands are actually constant.
 
 ## Checks
 
-[`circuit/tests/gadgets.rs`](circuit/tests/gadgets.rs), 11 tests:
+[`circuit/tests/gadgets.rs`](circuit/tests/gadgets.rs), 12 tests:
 - **Against SP1's own types** (`p3-koala-bear 0.4.3-succinct`, `BinomialExtensionField<KoalaBear, 4>`):
   - every base and extension gadget on edge values (0, 1, p - 1, (p ± 1)/2, 2^24, 2^30, the
     extension's d-th root) and random inputs;
@@ -49,6 +57,13 @@ so the circuit's gate count reflects which operands are actually constant.
 
   Given the observed bytes, the circuit transcript produces every sampled byte of both. This
   exact transcript of the final verifier costs 11,198,078 gates under v2 (10,916,094 under v1).
+- **Against the real zerocheck:** `m13-verify dump-zerocheck-v2` writes the c4 v2 proof's
+  zerocheck sumcheck to
+  [`circuit/fixtures/c4-v2-zerocheck.json`](circuit/fixtures/c4-v2-zerocheck.json): 21 rounds of
+  degree-4 polynomials.
+  - SP1's extension type confirms the rounds natively.
+  - The circuit accepts them and returns SP1's final evaluation, both plainly and garbled.
+  - A changed coefficient or claim is rejected.
 - **Merkle paths:**
   - roots match a native BLAKE3 tree;
   - a flipped sibling bit or a wrong root is rejected.
@@ -63,9 +78,14 @@ so the circuit's gate count reflects which operands are actually constant.
   - base inverse;
   - the sampler;
   - the canonical check on a non-canonical input;
-  - the full transcript script.
+  - the full transcript script;
+  - the real zerocheck sumcheck.
 - **Gate counts:** taken in ExecuteMode and as GarbleMode ciphertexts (the two must agree), and
   required to equal [`circuit/RESULTS.json`](circuit/RESULTS.json).
+  - The agreement check found one disagreement: adding a constant 0 built an AND of a carry and
+    its own negation. ExecuteMode counted it; the garbler emitted no ciphertext for it.
+  - `add` now returns the operand for + 0. It also uses `double` for x + x (61 gates against 94,
+    and no AND with one wire as both inputs). Every count agrees.
 
 ## Measured gate counts
 
@@ -90,6 +110,7 @@ Non-free (AND-class) gates; XOR and NOT are free.
 | BLAKE3, 1,025 bytes (18 compressions) | 183,385 | 187,380 |
 | **Transcript of the c4 final verification, v2** (1,177 compressions) | **11,198,078** | 12,252,570 (1,177 × 10,410) |
 | Transcript of the c4 final verification, v1 (1,144 compressions) | 10,916,094 | 11,909,040 |
+| Sumcheck rounds, zerocheck shape (21 rounds, degree 4; transcript excluded) | 2,600,555 | — |
 
 ## Decisions
 
