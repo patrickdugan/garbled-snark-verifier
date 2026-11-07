@@ -22,8 +22,10 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
-use slop_challenger::{CanObserve, CanSample, IopCtx, SerializingChallenger32};
-use slop_algebra::PrimeField32;
+use slop_challenger::{
+    CanObserve, CanSample, CanSampleBits, FieldChallenger, GrindingChallenger, IopCtx, SerializingChallenger32,
+};
+use slop_algebra::{AbstractField, PrimeField32, PrimeField64};
 use slop_symmetric::{CryptographicHasher, Hash, PseudoCompressionFunction};
 use sp1_primitives::{SP1ExtensionField, SP1Field};
 
@@ -204,9 +206,125 @@ impl IopCtx for Blake3KoalaBear {
     }
 }
 
+/// Transcript v2 domain (M14): fixed-cost challenge sampling over the same byte transcript.
+pub const TRANSCRIPT_DOMAIN_V2: &[u8] = b"garbled-snark-verifier/nova-bitvm3/m14/blake3-koalabear/v2";
+
+/// Fiat-Shamir challenger v2. Observing is as in [`Blake3Challenger`] (canonical 4-byte
+/// little-endian field elements, digest bytes). Sampling does a fixed amount of work:
+/// - a field element takes 8 bytes, read as a little-endian u64 and reduced mod p (no residue
+///   has probability above (1 + p/2^64)/p, so any event's probability grows by at most a factor
+///   1 + 2^-33 over uniform);
+/// - `sample_bits(n)` takes 4 bytes, little-endian, masked to n bits (as v1).
+///
+/// v1 rejection-samples 31-bit words, so the number of bytes a challenge consumes depends on
+/// the transcript and a circuit verifier has no fixed shape.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Blake3ChallengerV2 {
+    inner: Blake3Transcript,
+}
+
+impl Default for Blake3ChallengerV2 {
+    fn default() -> Self {
+        Self { inner: Blake3Transcript::new(TRANSCRIPT_DOMAIN_V2.to_vec()) }
+    }
+}
+
+impl CanObserve<SP1Field> for Blake3ChallengerV2 {
+    fn observe(&mut self, value: SP1Field) {
+        self.inner.observe_slice(&value.as_canonical_u32().to_le_bytes());
+    }
+}
+
+impl<const N: usize> CanObserve<Hash<SP1Field, u8, N>> for Blake3ChallengerV2 {
+    fn observe(&mut self, values: Hash<SP1Field, u8, N>) {
+        for v in values {
+            self.inner.observe(v);
+        }
+    }
+}
+
+/// v2 base-field challenge from 8 transcript bytes.
+pub fn sample_base_v2(bytes: [u8; 8]) -> SP1Field {
+    SP1Field::from_canonical_u32((u64::from_le_bytes(bytes) % SP1Field::ORDER_U64) as u32)
+}
+
+impl CanSample<SP1Field> for Blake3ChallengerV2 {
+    fn sample(&mut self) -> SP1Field {
+        sample_base_v2(self.inner.sample_array::<8>())
+    }
+}
+
+impl CanSampleBits<usize> for Blake3ChallengerV2 {
+    fn sample_bits(&mut self, bits: usize) -> usize {
+        assert!(bits < 32, "sample_bits({bits})");
+        let r = u32::from_le_bytes(self.inner.sample_array::<4>()) as usize;
+        r & ((1usize << bits) - 1)
+    }
+}
+
+impl GrindingChallenger for Blake3ChallengerV2 {
+    type Witness = SP1Field;
+
+    fn grind(&mut self, bits: usize) -> SP1Field {
+        let witness = (0..SP1Field::ORDER_U64)
+            .map(SP1Field::from_canonical_u64)
+            .find(|w| self.clone().check_witness(bits, *w))
+            .expect("no proof-of-work witness");
+        assert!(self.check_witness(bits, witness));
+        witness
+    }
+}
+
+impl FieldChallenger<SP1Field> for Blake3ChallengerV2 {}
+
+/// [`Blake3KoalaBear`] with challenger v2.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct Blake3KoalaBearV2;
+
+impl IopCtx for Blake3KoalaBearV2 {
+    type F = SP1Field;
+    type EF = SP1ExtensionField;
+    type Digest = Digest;
+    type Challenger = Blake3ChallengerV2;
+    type Hasher = LeafHasher;
+    type Compressor = NodeCompressor;
+
+    fn default_hasher_and_compressor() -> (Self::Hasher, Self::Compressor) {
+        (LeafHasher, NodeCompressor)
+    }
+
+    fn default_challenger() -> Self::Challenger {
+        Blake3ChallengerV2::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn v2_sampling_consumes_fixed_bytes() {
+        // Two challengers over the same transcript: v2 field samples always take 8 bytes.
+        let mut a = Blake3ChallengerV2::default();
+        let mut raw = Blake3Transcript::new(TRANSCRIPT_DOMAIN_V2.to_vec());
+        for i in 0..1000u32 {
+            let x = SP1Field::from_canonical_u32(i * 7919 % 0x7f00_0001);
+            a.observe(x);
+            raw.observe_slice(&x.as_canonical_u32().to_le_bytes());
+            let s: SP1Field = a.sample();
+            assert_eq!(s, sample_base_v2(raw.sample_array::<8>()));
+            let b = a.sample_bits(20);
+            assert_eq!(b, (u32::from_le_bytes(raw.sample_array::<4>()) as usize) & ((1 << 20) - 1));
+        }
+    }
+
+    #[test]
+    fn v2_grinding_witness_checks() {
+        let mut a = Blake3ChallengerV2::default();
+        a.observe(SP1Field::from_canonical_u32(5));
+        let w = a.clone().grind(8);
+        assert!(a.check_witness(8, w));
+    }
 
     #[test]
     fn compression_count_matches_blake3_structure() {

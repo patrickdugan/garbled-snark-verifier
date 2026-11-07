@@ -106,9 +106,20 @@ v2 takes 8 bytes per base-field challenge and reduces the little-endian u64 mod 
 - Query indices (`sample_bits`) stay as they are: 4 bytes masked to the low bits, which is uniform.
 - v2 uses its own transcript domain (`hash::DOMAIN_V2`).
 
-**Not done for v2:** the prover side. The c4 fixture has to be re-proved with a v2 challenger
-(`IopCtx` change in `m13/verify/src/ctx.rs`, wrap step only, about 10.5 GB). The circuit's sampler
-is checked against its native definition, not yet against an SP1 proof.
+**The prover side of v2 is in M13's code.**
+- `ctx::Blake3ChallengerV2` and `Blake3KoalaBearV2` are SP1 `IopCtx` types.
+- SP1's CPU prover proved the c4 shrink proof's wrap layer under them (`m13 wrap-only-v2`).
+  The output is [`../m13/fixtures/c4-wrap-blake3-v2.bin`](../m13/fixtures/c4-wrap-blake3-v2.bin):
+  same key, statement and size as v1, proved in 55 s.
+- `m13-verify verify-v2` accepts it.
+- Flipped bytes and altered public values are refused, and v1 and v2 proofs are each refused by
+  the other verifier. These checks are in `m13/verify/tests/final_verifier.rs`.
+- One v2 verification spends 1,177 transcript compressions in 537 squeezes
+  ([`../m13/results/verify-counts-c4-v2.json`](../m13/results/verify-counts-c4-v2.json)), against
+  1,144 in 504 for v1.
+
+The circuit's sampler is checked against v2's native definition (`ctx::sample_base_v2`'s
+formula). The circuit transcript is not yet run against a recorded v2 verification.
 
 **Constant multiplications.** M13's operation counter classified a multiplication as
 "small-constant" from its runtime operand values. In the circuit, only compile-time constants are

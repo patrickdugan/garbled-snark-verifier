@@ -24,7 +24,7 @@ use sp1_core_machine::riscv::RiscvAir;
 use sp1_hypercube::{
     inner_perm,
     prover::{AirProver, CpuShardProver, ProverSemaphore},
-    HashableKey, MachineVerifyingKey, SP1Pcs, SP1PcsProofInner, SP1RecursionProof,
+    HashableKey, MachineVerifyingKey, SP1Pcs, SP1PcsProofInner, SP1RecursionProof, SP1WrapProof,
 };
 use sp1_primitives::{SP1ExtensionField, SP1Field, SP1GlobalContext};
 use sp1_prover::{
@@ -49,8 +49,8 @@ use sp1_recursion_compiler::{
 use sp1_recursion_executor::{shape::RecursionShape, Block, Executor, RecursionProgram};
 
 pub use m13_verify::{
-    final_statement, verify_final, verify_wrap_proof, vk_sha256, wrap_verifier, Blake3KoalaBear, Blake3WrapProof,
-    Blake3WrapSC, FinalStatement,
+    final_statement, verify_final, verify_wrap_proof, verify_wrap_proof_v2, vk_sha256, wrap_verifier, wrap_verifier_v2,
+    Blake3KoalaBear, Blake3KoalaBearV2, Blake3WrapProof, Blake3WrapProofV2, Blake3WrapSC, FinalStatement,
 };
 
 /// The verifier crate names the wrap AIR itself; it must be sp1-prover's.
@@ -200,46 +200,67 @@ pub fn build_wrap_program(vks: &RecursionVks, shrink_shape: BTreeMap<String, usi
     Arc::new(wrap_program(&recursive_verifier::<SP1GlobalContext, _, WrapConfig>(verifier.shard_verifier()), &input))
 }
 
-/// Prove SP1's wrap program over the shrink proof under BLAKE3.
-pub async fn wrap_blake3(
-    shrink: ShrinkProof,
-    shrink_shape: BTreeMap<String, usize>,
-    vks: &RecursionVks,
-    t: &mut PhaseTimes,
-) -> Result<Blake3WrapProof> {
-    let s = Instant::now();
-    let program = build_wrap_program(vks, shrink_shape);
-    t.wrap_program_build_s = s.elapsed().as_secs_f64();
+/// Transcript v2 prover types ([`m13_verify::ctx::Blake3ChallengerV2`]).
+pub type Blake3WrapProverV2 = CpuShardProver<
+    Blake3KoalaBearV2,
+    SP1Pcs<Blake3KoalaBearV2>,
+    StackedPcsProver<FieldMerkleTreeProver<SP1Field, u8, Blake3KoalaBearV2, 32>, Blake3KoalaBearV2>,
+    WrapAir<SP1Field>,
+>;
 
-    mem_note("wrap program built");
-    let prover = Arc::new(Blake3WrapProver::new(wrap_verifier().shard_verifier().clone()));
-    let s = Instant::now();
-    let (_, vk) = prover.setup(program.clone(), ProverSemaphore::new(1)).await;
-    t.wrap_setup_s = s.elapsed().as_secs_f64();
-    mem_note("wrap setup done");
+macro_rules! wrap_with {
+    ($(#[$doc:meta])* $name:ident, $prover:ty, $proof:ty, $verifier:path, $verify:path) => {
+        $(#[$doc])*
+        pub async fn $name(
+            shrink: ShrinkProof,
+            shrink_shape: BTreeMap<String, usize>,
+            vks: &RecursionVks,
+            t: &mut PhaseTimes,
+        ) -> Result<$proof> {
+            let s = Instant::now();
+            let program = build_wrap_program(vks, shrink_shape);
+            t.wrap_program_build_s = s.elapsed().as_secs_f64();
 
-    let SP1RecursionProof { vk: svk, proof: sproof, vk_merkle_proof } = shrink;
-    let s = Instant::now();
-    let witness = with_vk_merkle(vks, svk, sproof, vk_merkle_proof);
-    let mut stream = Vec::new();
-    Witnessable::<WrapConfig>::write(&witness, &mut stream);
-    let record = run_program(&program, stream)?;
-    t.wrap_execute_s = s.elapsed().as_secs_f64();
-    mem_note("wrap program executed");
+            mem_note("wrap program built");
+            let prover = Arc::new(<$prover>::new($verifier().shard_verifier().clone()));
+            let s = Instant::now();
+            let (_, vk) = prover.setup(program.clone(), ProverSemaphore::new(1)).await;
+            t.wrap_setup_s = s.elapsed().as_secs_f64();
+            mem_note("wrap setup done");
 
-    let s = Instant::now();
-    let (_, proof, permit) =
-        prover.setup_and_prove_shard(program, record, Some(vk.clone()), ProverSemaphore::new(1)).await;
-    let _ = permit.release();
-    t.wrap_prove_s = s.elapsed().as_secs_f64();
-    mem_note("wrap proved");
+            let SP1RecursionProof { vk: svk, proof: sproof, vk_merkle_proof } = shrink;
+            let s = Instant::now();
+            let witness = with_vk_merkle(vks, svk, sproof, vk_merkle_proof);
+            let mut stream = Vec::new();
+            Witnessable::<WrapConfig>::write(&witness, &mut stream);
+            let record = run_program(&program, stream)?;
+            t.wrap_execute_s = s.elapsed().as_secs_f64();
+            mem_note("wrap program executed");
 
-    let wrap = Blake3WrapProof { vk, proof };
-    let s = Instant::now();
-    verify_wrap_proof(&wrap)?;
-    t.wrap_verify_s = s.elapsed().as_secs_f64();
-    Ok(wrap)
+            let s = Instant::now();
+            let (_, proof, permit) =
+                prover.setup_and_prove_shard(program, record, Some(vk.clone()), ProverSemaphore::new(1)).await;
+            let _ = permit.release();
+            t.wrap_prove_s = s.elapsed().as_secs_f64();
+            mem_note("wrap proved");
+
+            let wrap: $proof = SP1WrapProof { vk, proof };
+            let s = Instant::now();
+            $verify(&wrap)?;
+            t.wrap_verify_s = s.elapsed().as_secs_f64();
+            Ok(wrap)
+        }
+    };
 }
+
+wrap_with!(
+    /// Prove SP1's wrap program over the shrink proof under BLAKE3 (transcript v1).
+    wrap_blake3, Blake3WrapProver, Blake3WrapProof, wrap_verifier, verify_wrap_proof
+);
+wrap_with!(
+    /// [`wrap_blake3`] with transcript v2 (fixed-cost challenges).
+    wrap_blake3_v2, Blake3WrapProverV2, Blake3WrapProofV2, wrap_verifier_v2, verify_wrap_proof_v2
+);
 
 /// Build SP1's BN254 wrap key from [`build_wrap_program`] and compare it with
 /// the key sp1-prover 6.9.0 embeds (`verify::WRAP_VK_BYTES`). Equality means

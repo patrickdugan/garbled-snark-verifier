@@ -24,7 +24,7 @@ use sp1_recursion_executor::RecursionPublicValues;
 use sp1_recursion_machine::RecursionAir;
 use sp1_verifier::compressed::RECURSION_MAX_LOG_ROW_COUNT;
 
-pub use ctx::Blake3KoalaBear;
+pub use ctx::{Blake3KoalaBear, Blake3KoalaBearV2};
 
 /// sp1-prover 6.9.0 `components::WRAP_LOG_STACKING_HEIGHT` (crate-private there).
 pub const WRAP_LOG_STACKING_HEIGHT: u32 = 21;
@@ -33,6 +33,9 @@ pub const WRAP_LOG_STACKING_HEIGHT: u32 = 21;
 pub type WrapAir = RecursionAir<SP1Field, 3, 1>;
 pub type Blake3WrapSC = ShardContextImpl<Blake3KoalaBear, SP1Pcs<Blake3KoalaBear>, WrapAir>;
 pub type Blake3WrapProof = SP1WrapProof<Blake3KoalaBear, SP1PcsProof<Blake3KoalaBear>>;
+/// Transcript v2 (fixed-cost challenges, [`ctx::Blake3ChallengerV2`]).
+pub type Blake3WrapSCV2 = ShardContextImpl<Blake3KoalaBearV2, SP1Pcs<Blake3KoalaBearV2>, WrapAir>;
+pub type Blake3WrapProofV2 = SP1WrapProof<Blake3KoalaBearV2, SP1PcsProof<Blake3KoalaBearV2>>;
 
 /// The BLAKE3 wrap verifier: SP1's wrap machine and FRI parameters, BLAKE3 hashing.
 pub fn wrap_verifier() -> MachineVerifier<Blake3KoalaBear, Blake3WrapSC> {
@@ -42,6 +45,40 @@ pub fn wrap_verifier() -> MachineVerifier<Blake3KoalaBear, Blake3WrapSC> {
         RECURSION_MAX_LOG_ROW_COUNT,
         WrapAir::wrap_machine(),
     ))
+}
+
+/// [`wrap_verifier`] with transcript v2.
+pub fn wrap_verifier_v2() -> MachineVerifier<Blake3KoalaBearV2, Blake3WrapSCV2> {
+    MachineVerifier::new(ShardVerifier::from_basefold_parameters(
+        wrap_fri_config(),
+        WRAP_LOG_STACKING_HEIGHT,
+        RECURSION_MAX_LOG_ROW_COUNT,
+        WrapAir::wrap_machine(),
+    ))
+}
+
+/// A final-layer configuration: its STARK check.
+pub trait FinalLayer: IopCtx<F = SP1Field> {
+    fn verify_stark(wrap: &SP1WrapProof<Self, SP1PcsProof<Self>>) -> Result<()>;
+}
+impl FinalLayer for Blake3KoalaBear {
+    fn verify_stark(wrap: &Blake3WrapProof) -> Result<()> {
+        verify_wrap_proof(wrap)
+    }
+}
+impl FinalLayer for Blake3KoalaBearV2 {
+    fn verify_stark(wrap: &Blake3WrapProofV2) -> Result<()> {
+        verify_wrap_proof_v2(wrap)
+    }
+}
+
+/// [`verify_wrap_proof`] with transcript v2.
+pub fn verify_wrap_proof_v2(wrap: &Blake3WrapProofV2) -> Result<()> {
+    let mut challenger = Blake3KoalaBearV2::default_challenger();
+    wrap.vk.observe_into(&mut challenger);
+    wrap_verifier_v2()
+        .verify_shard(&wrap.vk, &wrap.proof, &mut challenger)
+        .map_err(|e| anyhow!("BLAKE3 wrap proof (transcript v2) rejected: {e:?}"))
 }
 
 pub fn sha_hex(b: &[u8]) -> String {
@@ -80,7 +117,7 @@ fn felts_hex(xs: &[SP1Field]) -> String {
     hex::encode(xs.iter().flat_map(|x| x.as_canonical_u32().to_le_bytes()).collect::<Vec<u8>>())
 }
 
-pub fn final_statement(wrap: &Blake3WrapProof) -> Result<FinalStatement> {
+pub fn final_statement<GC: FinalLayer>(wrap: &SP1WrapProof<GC, SP1PcsProof<GC>>) -> Result<FinalStatement> {
     ensure!(
         wrap.proof.public_values.len() >= std::mem::size_of::<RecursionPublicValues<u8>>(),
         "public values too short"
@@ -107,10 +144,13 @@ pub fn final_statement(wrap: &Blake3WrapProof) -> Result<FinalStatement> {
 /// The complete final-proof verifier: the pinned wrap key, the STARK, and
 /// every statement field. `expect` carries the pins (wrap key, guest program,
 /// recursion key map) and the statement digest the caller requires.
-pub fn verify_final(wrap: &Blake3WrapProof, expect: &FinalStatement) -> Result<FinalStatement> {
+pub fn verify_final<GC: FinalLayer>(
+    wrap: &SP1WrapProof<GC, SP1PcsProof<GC>>,
+    expect: &FinalStatement,
+) -> Result<FinalStatement> {
     let got = final_statement(wrap)?;
     ensure!(got.wrap_vk_sha256 == expect.wrap_vk_sha256, "wrap key is not the pinned key");
-    verify_wrap_proof(wrap)?;
+    GC::verify_stark(wrap)?;
     ensure!(got.exit_code == 0, "guest exit code {} (a refused input)", got.exit_code);
     ensure!(got.is_complete == 1, "proof is not complete");
     ensure!(got.program_vk_digest == expect.program_vk_digest, "different guest program");

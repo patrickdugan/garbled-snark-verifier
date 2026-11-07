@@ -1,11 +1,14 @@
-//! m13-verify verify WRAP.bin EXPECT.json
+//! m13-verify verify WRAP.bin EXPECT.json       (transcript v1, M13's final proof)
+//! m13-verify verify-v2 WRAP.bin EXPECT.json    (transcript v2, fixed-cost challenges)
 //!     The complete final verifier, run once on one thread: wall time,
 //!     BLAKE3 compressions per role and (with the `opcount` feature and
 //!     patched p3-koala-bear) every KoalaBear operation.
 use std::{collections::BTreeMap, time::Instant};
 
 use anyhow::{bail, ensure, Result};
-use m13_verify::{ctx, opcount, verify_final, Blake3WrapProof, FinalStatement};
+use m13_verify::{ctx, opcount, verify_final, Blake3KoalaBear, Blake3KoalaBearV2, FinalLayer, FinalStatement};
+use serde::{de::DeserializeOwned, Serialize};
+use sp1_hypercube::{SP1PcsProof, SP1WrapProof, ShardProof};
 
 fn main() -> Result<()> {
     // One rayon thread: a parallel reduction adds one partial sum per extra
@@ -14,10 +17,22 @@ fn main() -> Result<()> {
     // work of the sequential verifier, which is what a circuit evaluates.
     std::env::set_var("RAYON_NUM_THREADS", "1");
     let a: Vec<String> = std::env::args().collect();
-    ensure!(a.len() == 4 && a[1] == "verify", "usage: m13-verify verify WRAP.bin EXPECT.json");
-    let bytes = std::fs::read(&a[2])?;
-    let wrap: Blake3WrapProof = bincode::deserialize(&bytes)?;
-    let expect: FinalStatement = serde_json::from_slice(&std::fs::read(&a[3])?)?;
+    ensure!(a.len() == 4, "usage: m13-verify verify|verify-v2 WRAP.bin EXPECT.json");
+    match a[1].as_str() {
+        "verify" => run::<Blake3KoalaBear>(&a[2], &a[3]),
+        "verify-v2" => run::<Blake3KoalaBearV2>(&a[2], &a[3]),
+        _ => bail!("usage: m13-verify verify|verify-v2 WRAP.bin EXPECT.json"),
+    }
+}
+
+fn run<GC: FinalLayer>(wrap_path: &str, expect_path: &str) -> Result<()>
+where
+    SP1WrapProof<GC, SP1PcsProof<GC>>: DeserializeOwned,
+    ShardProof<GC, SP1PcsProof<GC>>: Serialize,
+{
+    let bytes = std::fs::read(wrap_path)?;
+    let wrap: SP1WrapProof<GC, SP1PcsProof<GC>> = bincode::deserialize(&bytes)?;
+    let expect: FinalStatement = serde_json::from_slice(&std::fs::read(expect_path)?)?;
     let proof_bytes = bincode::serialize(&wrap.proof)?.len();
     ctx::reset_counters();
     opcount::reset();

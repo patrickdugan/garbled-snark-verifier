@@ -137,6 +137,25 @@ Both depend on the transcript: challenges are sampled by rejection, and some ver
 depends on sampled values. A circuit must cover the worst case. The price takes the larger run per counter and adds 10,000
 multiplications and 64 compressions.
 
+**Transcript v2 (added in M14).** `ctx::Blake3KoalaBearV2` keeps everything except challenge
+sampling:
+- each field challenge takes 8 bytes, as a u64 mod p;
+- query bits are unchanged.
+
+`m13 wrap-only-v2` re-proved the c4 shrink proof under it:
+- [`fixtures/c4-wrap-blake3-v2.bin`](fixtures/c4-wrap-blake3-v2.bin);
+- same key, statement and size as v1;
+- proved in 55 s at the same memory.
+
+`m13-verify verify-v2` counts it
+([`results/verify-counts-c4-v2.json`](results/verify-counts-c4-v2.json)):
+- 1,177 transcript compressions in 537 squeezes;
+- Merkle counts as above;
+- 33,659 compressions in total.
+
+With v2 the transcript's byte schedule no longer depends on the challenges; see
+[`../m14/README.md`](../m14/README.md).
+
 ## Garbled price
 
 [`price_m13.py`](price_m13.py) writes [`results/pricing.json`](results/pricing.json) from the

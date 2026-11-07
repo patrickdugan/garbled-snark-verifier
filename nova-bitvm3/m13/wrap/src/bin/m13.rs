@@ -7,6 +7,9 @@
 //!   m13 shrink-wrap COMPRESSED.bin OUTDIR   |   m13 wrap-only OUTDIR (reuses OUTDIR/shrink.bin)
 //!       SP1's shrink step, then SP1's wrap program proved under BLAKE3. Writes
 //!       shrink.bin, shrink-shape.json, wrap.bin, statement.json, report.json.
+//!   m13 wrap-only-v2 OUTDIR
+//!       The wrap step of OUTDIR/shrink.bin under transcript v2 (fixed-cost
+//!       challenges). Writes wrap-v2.bin, statement-v2.json, report-v2.json.
 //!   m13 verify WRAP.bin EXPECT.json
 //!       The complete final verifier (pinned key, STARK, statement fields) with
 //!       BLAKE3 compression counts per role.
@@ -97,6 +100,33 @@ async fn main() -> Result<()> {
             ensure!(report.exit_code == 0, "guest exits with code {}", report.exit_code);
             ensure!(sha_hex(pv.as_slice()) == a[4], "committed statement differs");
             compress(ELF_A, s, &a[5], "architecture A, complete Nova verifier").await?;
+        }
+        "wrap-only-v2" => {
+            // wrap-only-v2 OUTDIR: the wrap step of OUTDIR/shrink.bin under transcript v2.
+            let out = Path::new(&a[2]).to_path_buf();
+            let vks = pipeline::recursion_vks();
+            let mut t = pipeline::PhaseTimes::default();
+            let shrink: pipeline::ShrinkProof = bincode::deserialize(&std::fs::read(out.join("shrink.bin"))?)?;
+            let shape: BTreeMap<String, usize> = serde_json::from_slice(&std::fs::read(out.join("shrink-shape.json"))?)?;
+            let committed = std::fs::read_to_string(out.join("committed.sha256")).map(|s| s.trim().to_string()).unwrap_or_default();
+            let wrap = pipeline::wrap_blake3_v2(shrink, shape, &vks, &mut t).await?;
+            let wrap_bytes = bincode::serialize(&wrap)?;
+            std::fs::write(out.join("wrap-v2.bin"), &wrap_bytes)?;
+            let st = pipeline::final_statement(&wrap)?;
+            ensure!(committed.is_empty() || st.committed_values_sha256 == committed, "wrap commits a different statement digest");
+            write_json(&out.join("statement-v2.json"), &serde_json::to_value(&st)?)?;
+            let proof_only = bincode::serialize(&wrap.proof)?;
+            write_json(
+                &out.join("report-v2.json"),
+                &serde_json::json!({
+                    "transcript": "v2", "times": t, "statement": st,
+                    "wrap_file_bytes": wrap_bytes.len(),
+                    "wrap_proof_bytes": proof_only.len(),
+                    "wrap_vk_bytes": wrap_bytes.len() - proof_only.len(),
+                    "wrap_proof_sha256": sha_hex(&wrap_bytes),
+                }),
+            )?;
+            println!("{}", std::fs::read_to_string(out.join("report-v2.json"))?);
         }
         "shrink-wrap" | "wrap-only" => {
             // shrink-wrap COMPRESSED.bin OUTDIR
