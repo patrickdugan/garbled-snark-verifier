@@ -20,6 +20,10 @@ jobs:
       RUSTFLAGS: '-C debuginfo=0'
     steps:
       - uses: actions/checkout@v4
+      - name: Swap on the runner's temporary disk (SP1 crates and the circuit tests exceed 16 GB RAM)
+        run: |
+          sudo fallocate -l 16G /mnt/ci-swap && sudo chmod 600 /mnt/ci-swap && sudo mkswap /mnt/ci-swap && sudo swapon /mnt/ci-swap
+          free -g
       - name: Toolchain and protoc (sp1-prover-types generates its gRPC types with tonic-build)
         run: |
           rustup toolchain install 1.90.0 --profile minimal

@@ -38,10 +38,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
-      CARGO_BUILD_JOBS: '4'
+      CARGO_BUILD_JOBS: '2'
       RUSTFLAGS: '-C debuginfo=0'
     steps:
       - uses: actions/checkout@v4
+      - name: Swap on the runner's temporary disk (SP1 crates and the circuit tests exceed 16 GB RAM)
+        run: |
+          sudo fallocate -l 16G /mnt/ci-swap && sudo chmod 600 /mnt/ci-swap && sudo mkswap /mnt/ci-swap && sudo swapon /mnt/ci-swap
+          free -g
       - name: Toolchain
         run: |
           mkdir -p nova-bitvm3/m14/ci
