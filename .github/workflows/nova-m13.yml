@@ -1,0 +1,52 @@
+name: Nova M13 BLAKE3 final proof
+on:
+  push:
+    branches: ['main', 'feat/nova-bitvm3-*']
+    paths: ['nova-bitvm3/m13/**', 'nova-bitvm3/m12/gates/RESULTS.json', 'nova-bitvm3/cost_envelope.py', '.github/workflows/nova-m13.yml']
+  pull_request:
+    paths: ['nova-bitvm3/m13/**', '.github/workflows/nova-m13.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nova-m13-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  m13:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: '4'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain and fixture digests
+        run: |
+          mkdir -p nova-bitvm3/m13/ci
+          rustup toolchain install 1.90.0 --profile minimal
+          rustc +1.90.0 --version | tee nova-bitvm3/m13/ci/rustc.txt
+          sha256sum nova-bitvm3/m13/fixtures/* | tee nova-bitvm3/m13/ci/fixtures.sha256
+      - name: Final verifier on the committed BLAKE3 wrap proof (honest proof, mutations)
+        run: |
+          set -o pipefail
+          cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/m13/verify/Cargo.toml -- --test-threads=2 --nocapture 2>&1 | tee nova-bitvm3/m13/ci/verify-tests.txt
+      - name: Count every BLAKE3 compression and KoalaBear operation of one verification
+        run: |
+          set -o pipefail
+          cp -r nova-bitvm3/m13/verify "$RUNNER_TEMP/verify-opcount"
+          python3 nova-bitvm3/m13/verify/opcount/patch_koala_bear.py "$(ls -d ~/.cargo/registry/src/index.crates.io-*/ | head -1)" "$RUNNER_TEMP/p3-koala-bear-opcount"
+          cargo +1.90.0 build --release --features opcount --manifest-path "$RUNNER_TEMP/verify-opcount/Cargo.toml" \
+            --config "patch.crates-io.p3-koala-bear.path=\"$RUNNER_TEMP/p3-koala-bear-opcount\""
+          "$RUNNER_TEMP/verify-opcount/target/release/m13-verify" verify nova-bitvm3/m13/fixtures/c4-wrap-blake3.bin nova-bitvm3/m13/fixtures/c4-statement.json \
+            | tee nova-bitvm3/m13/ci/verify-counts.json
+          python3 nova-bitvm3/m13/compare_counts.py nova-bitvm3/m13/results/verify-counts-c4.json nova-bitvm3/m13/ci/verify-counts.json
+      - name: Garbled price of the final verifier from recorded counts
+        run: |
+          set -o pipefail
+          python3 nova-bitvm3/m13/price_m13.py > nova-bitvm3/m13/ci/pricing.json
+          git diff --exit-code nova-bitvm3/m13/results/pricing.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nova-m13-${{ github.sha }}
+          path: nova-bitvm3/m13/ci/
