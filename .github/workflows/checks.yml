@@ -1,6 +1,14 @@
 name: Code Checks
 
-on: [push]
+# A PR receives one set of checks. Branch pushes no longer duplicate PR work.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: code-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
