@@ -3,6 +3,11 @@ name: Update Gate Count Badges
 on:
   push:
     branches: [ main ]
+    paths:
+      - '**'
+      - '!nova-bitvm3/prover/**'
+      - '!nova-bitvm3/prover-gpu/**'
+      - '!.github/workflows/nova-prover.yml'
 
 jobs:
   gate-count:

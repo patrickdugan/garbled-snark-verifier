@@ -2,9 +2,9 @@ name: Nova fixed-matrix R1CS conformance
 on:
   push:
     branches: [main]
-    paths: ['src/nova.rs', 'src/nova/**', 'nova-bitvm3/**', '.github/workflows/nova-r1cs.yml']
+    paths: ['src/nova.rs', 'src/nova/**', 'nova-bitvm3/**', '!nova-bitvm3/prover/**', '!nova-bitvm3/prover-gpu/**', '.github/workflows/nova-r1cs.yml']
   pull_request:
-    paths: ['src/nova.rs', 'src/nova/**', 'nova-bitvm3/**', '.github/workflows/nova-r1cs.yml']
+    paths: ['src/nova.rs', 'src/nova/**', 'nova-bitvm3/**', '!nova-bitvm3/prover/**', '!nova-bitvm3/prover-gpu/**', '.github/workflows/nova-r1cs.yml']
   workflow_dispatch:
 permissions:
   contents: read
