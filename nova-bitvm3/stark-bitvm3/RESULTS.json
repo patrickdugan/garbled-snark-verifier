@@ -1,0 +1,46 @@
+{
+  "stage": "S0: pinned Stwo Boolean components and repository garbling adapter",
+  "tested_commit": "41a4b00820211823058f7f2a77f57cef3105985e",
+  "upstream_commit": "e9a38e12d09979f7a8625e233a80fecac6c38f02",
+  "workflow_run": 42621218798,
+  "workflow_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42621218798",
+  "jobs": {
+    "components": {"id": 129173547189, "conclusion": "success", "tests_passed": 8, "tests_failed": 0, "test_seconds": 0.06, "cargo_compile_seconds": 1.69, "native_component_vectors": 204},
+    "tiny_garbling": {"id": 129173546527, "conclusion": "success", "tests_passed": 1, "tests_failed": 0, "cases": 5, "test_seconds_total": 0.20, "cargo_compile_seconds": 49.51}
+  },
+  "and_gate_counts": {
+    "m31_add_sub_mul_combined": 2362,
+    "qm31_multiplication": 22859,
+    "blake2s_64_variable_bytes": 15221,
+    "uniform_merkle_opening_two_columns_depth_three": 57929
+  },
+  "garbled_cases": [
+    {"case": 0, "mutation": null, "accepted": true, "ciphertexts": 57929},
+    {"case": 1, "mutation": "leaf bit", "accepted": false, "ciphertexts": 57929},
+    {"case": 2, "mutation": "sibling bit", "accepted": false, "ciphertexts": 57929},
+    {"case": 3, "mutation": "low index bit", "accepted": false, "ciphertexts": 57929},
+    {"case": 4, "mutation": "high out-of-range index bit", "accepted": false, "ciphertexts": 57929}
+  ],
+  "component_vectors_sha256": "35aade2fa0612e7f97a99004dbb8e8c4ff06b05b6ed0166601bdf0ad0c24376b",
+  "evidence_artifacts": {
+    "components": {"id": 13675523235, "zip_sha256": "8099d797785d086ba6f1df892646ba767add15cc127190f78505118f4a931feb"},
+    "garbling": {"id": 13675538401, "zip_sha256": "92df36c5eddea37138ad21c2162bb6518443bb4904233c867efb480ba18e26c7", "includes": ["garbled.txt", "dependencies.txt", "adapter-Cargo.lock"]}
+  },
+  "scope": {
+    "native_reference": "Python hashlib.blake2s and direct modular-extension arithmetic; three literal upstream hash/channel known-answer tests",
+    "fixture_type": "synthetic component inputs and Merkle openings",
+    "garbling_engine": "garbled-snark-verifier at tested_commit with default-features=false",
+    "full_stark_verified": false,
+    "authentic_shinigami_proof_verified": false,
+    "bitcoin_dispute_protocol_tested": false,
+    "nova_proving_launched": false,
+    "upstream_stwo_compiled": false
+  },
+  "notes": [
+    "The garbled test checks both the expected output label and inequality with the opposite label for every case.",
+    "The test clocks exclude compilation, toolchain installation, artifact upload and runner setup.",
+    "The tiny-garbling test duration covers five plain executions plus five garble/evaluate executions.",
+    "These component counts do not estimate the cost of a complete Stwo or Cairo verifier.",
+    "Artifact URLs can expire according to repository retention settings; this JSON records the observed results and exact tested commit."
+  ]
+}
