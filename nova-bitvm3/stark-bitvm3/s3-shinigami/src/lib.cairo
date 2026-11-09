@@ -34,11 +34,11 @@ pub struct Receipt {
 #[executable]
 pub fn main(request: Request) -> Receipt {
     // This laboratory is explicitly restricted to regtest and legacy input 0.
-    assert!(request.network == 3, 'regtest only');
-    assert!(request.application == 1 || request.application == 2, 'unknown application');
-    assert!(request.raw_transaction.len() <= 4096, 'transaction budget');
-    assert!(request.prevout_script.len() <= 1024, 'script budget');
-    assert!(request.prevout_amount <= MAX_MONEY, 'invalid prevout amount');
+    assert(request.network == 3, 'regtest only');
+    assert(request.application == 1 || request.application == 2, 'unknown application');
+    assert(request.raw_transaction.len() <= 4096, 'transaction budget');
+    assert(request.prevout_script.len() <= 1024, 'script budget');
+    assert(request.prevout_amount <= MAX_MONEY, 'invalid prevout amount');
     let amount: i64 = request.prevout_amount.try_into().unwrap();
     let mut transaction = EngineInternalTransactionImpl::deserialize(
         request.raw_transaction.clone(), 0,
@@ -48,14 +48,14 @@ pub fn main(request: Request) -> Receipt {
             block_height: request.prevout_height,
         }],
     );
-    assert!(transaction.transaction_inputs.len() == 1, 'one input required');
-    assert!(!transaction.is_coinbase(), 'coinbase unsupported');
-    assert!(transaction.transaction_outputs.len() > 0, 'output required');
-    assert!(transaction.transaction_outputs.len() <= 8, 'output budget');
-    assert!(transaction.transaction_inputs[0].witness.is_empty(), 'legacy input only');
+    assert(transaction.transaction_inputs.len() == 1, 'one input required');
+    assert(!transaction.is_coinbase(), 'coinbase unsupported');
+    assert(transaction.transaction_outputs.len() > 0, 'output required');
+    assert(transaction.transaction_outputs.len() <= 8, 'output budget');
+    assert(transaction.transaction_inputs[0].witness.is_empty(), 'legacy input only');
     // Bind exactly the bytes that the engine parsed, including sequence and locktime.
     let canonical = transaction.clone().serialize();
-    assert!(canonical == request.raw_transaction, 'noncanonical transaction');
+    assert(canonical == request.raw_transaction, 'noncanonical transaction');
     let unsigned = transaction.clone().serialize_no_witness();
     let txid = double_sha256(@unsigned);
     transaction.txid = txid;
