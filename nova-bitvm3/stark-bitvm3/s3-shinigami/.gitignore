@@ -1,0 +1,5 @@
+/vendor/
+/target/
+/out/
+/src/tests.cairo
+**/__pycache__/

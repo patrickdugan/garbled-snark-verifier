@@ -1,0 +1,22 @@
+[package]
+name = "shinigami_bitvm3_receipt"
+version = "0.1.0"
+edition = "2024_07"
+
+[workspace]
+
+[executable]
+
+[cairo]
+enable-gas = false
+
+[dependencies]
+cairo_execute = "=2.18.0"
+shinigami_engine = { path = "vendor/shinigami/packages/engine" }
+shinigami_utils = { path = "vendor/shinigami/packages/utils" }
+
+[dev-dependencies]
+cairo_test = "=2.18.0"
+
+[scripts]
+test = "scarb cairo-test"
