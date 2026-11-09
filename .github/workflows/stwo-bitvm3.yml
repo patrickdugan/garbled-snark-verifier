@@ -8,11 +8,12 @@ on:
   workflow_dispatch:
     inputs:
       s2_fixture:
-        description: 'Explicitly run the bounded tiny-STARK laboratory'
+        description: 'Explicitly verify and garble the frozen test-only STARK fixture'
         type: boolean
         default: false
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: stwo-bitvm3-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -119,23 +120,34 @@ jobs:
         with:
           workspaces: nova-bitvm3/stark-bitvm3/s2-lab
           cache-on-failure: true
-      - name: Compile isolated tiny-STARK laboratory
+      # Fixed artifact from the successful native/Boolean run. The executable pins
+      # the bundle, graph and witness digests independently. No proof is regenerated.
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 42632483370
+          name: stwo-s2-fixture-2e107d2f4423887e80c834e4a2a0f22a34640b2c
+          path: nova-bitvm3/stark-bitvm3/s2-lab/out/
+      - name: Compile isolated verifier and disk-backed garbling test
         shell: bash
         run: |
           set -euo pipefail
           OUT=nova-bitvm3/stark-bitvm3/s2-lab/out
-          mkdir -p "$OUT"
-          timeout --kill-after=5s 360s cargo +nightly-2026-03-06 build --manifest-path nova-bitvm3/stark-bitvm3/s2-lab/Cargo.toml 2>&1 | tee "$OUT/build.txt"
+          timeout --kill-after=5s 360s cargo +nightly-2026-03-06 build --features garbled --manifest-path nova-bitvm3/stark-bitvm3/s2-lab/Cargo.toml 2>&1 | tee "$OUT/build.txt"
+          timeout --kill-after=5s 60s cargo +nightly-2026-03-06 test --features garbled --manifest-path nova-bitvm3/stark-bitvm3/s2-lab/Cargo.toml --bin s2-garble -- --nocapture 2>&1 | tee "$OUT/backend-test.txt"
           cp nova-bitvm3/stark-bitvm3/s2-lab/Cargo.lock "$OUT/Cargo.lock"
-      - name: Generate one bounded authentic example proof and check the full relation
+      - name: Recheck frozen proof and full garbled acceptance labels
         shell: bash
         run: |
           set -euo pipefail
           ulimit -v 6291456
           OUT=nova-bitvm3/stark-bitvm3/s2-lab/out
-          BIN=nova-bitvm3/stark-bitvm3/s2-lab/target/debug/stwo-bitvm3-s2-lab
-          /usr/bin/time -v timeout --kill-after=5s 60s "$BIN" generate "$OUT" 2>&1 | tee "$OUT/generation.txt"
-          /usr/bin/time -v timeout --kill-after=5s 180s "$BIN" check "$OUT" "$(cat "$OUT/bundle.sha256")" 2>&1 | tee "$OUT/check.txt"
+          BIN=nova-bitvm3/stark-bitvm3/s2-lab/target/debug
+          /usr/bin/time -v timeout --kill-after=5s 180s "$BIN/stwo-bitvm3-s2-lab" check "$OUT" 735bf38f3d45a8ef537279d8f4e244b11afee2863ac91ebcab5d079195365210 2>&1 | tee "$OUT/check.txt"
+          /usr/bin/time -v timeout --kill-after=5s 180s "$BIN/s2-garble" "$OUT" 2>&1 | tee "$OUT/garbling.txt"
+      - name: Remove bounded ciphertext scratch
+        if: always()
+        run: rm -f nova-bitvm3/stark-bitvm3/s2-lab/s2-ciphertexts.bin
       - uses: actions/upload-artifact@v4
         if: always()
         with:

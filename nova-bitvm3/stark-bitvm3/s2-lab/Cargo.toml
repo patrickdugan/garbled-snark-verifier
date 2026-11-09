@@ -8,6 +8,14 @@ description = "Opt-in bounded genuine-STARK experiment; weak test parameters, ne
 
 [workspace]
 
+[features]
+garbled = ["dep:stwo-bitvm3-adapter", "dep:garbled-snark-verifier", "dep:rand", "dep:rand_chacha"]
+
+[[bin]]
+name = "s2-garble"
+path = "src/bin/s2-garble.rs"
+required-features = ["garbled"]
+
 [dependencies]
 anyhow = "1"
 hex = "0.4"
@@ -19,6 +27,10 @@ sha2 = "0.10"
 stwo-bitvm3-core = { path = "../core" }
 stwo-bitvm3-lowering = { path = "../lowering" }
 stwo-bitvm3-upstream = { path = "../upstream" }
+stwo-bitvm3-adapter = { path = "../adapter", optional = true }
+garbled-snark-verifier = { path = "../../..", default-features = false, optional = true }
+rand = { version = "0.8", optional = true }
+rand_chacha = { version = "0.3", optional = true }
 circuits = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
 circuits-stark-verifier = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
 circuits-stark-verifier-examples = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
