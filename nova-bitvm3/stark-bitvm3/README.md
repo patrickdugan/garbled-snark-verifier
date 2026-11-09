@@ -1,54 +1,59 @@
-# S0: direct Stwo-to-Boolean prototype
+# Direct Stwo-to-Boolean prototype
 
-Experimental components for eventual Shinigami, Ark and UTXORef verification in the repository's garbled-circuit engine. The initial acceptance bit authenticates a single Merkle opening under a pinned root. Complete STARK verification remains a later milestone.
+Experimental components and a finalized-circuit importer for eventual Shinigami, Ark and UTXORef verification in the repository's garbled-circuit engine. S0 covers field/hash/channel primitives and Merkle openings. S1 lowers the complete gate language of a pinned upstream arithmetic circuit. Complete STARK verification remains a later milestone.
 
-## Verified result
+## Current checkpoint: S1 passed
 
-Both jobs passed on code commit `41a4b00820211823058f7f2a77f57cef3105985e` in [workflow run 42621218798](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42621218798).
+Tested code: `315837b4e32bead8e012f53e0b4a73ebdc0fd195`. All jobs passed in [workflow run 42627178138](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42627178138).
 
-The dependency-free core passed 8 tests over 204 independently generated component vectors, with literal upstream hash/channel known-answer tests. The repository adapter also passed its garbled test: one valid opening reached the accept label; four mutations reached the reject label. Each case emitted 57,929 ciphertexts, matching the Boolean non-free gate count.
-
-| Component | Measured AND-class gates |
+| Test group | Passed |
 | --- | ---: |
-| M31 addition, subtraction and multiplication, combined | 2,362 |
+| S0 components, with 204 independent vectors | 8 |
+| S1 lowering and adversarial input checks | 6 |
+| Compiled upstream conformance | 3 |
+| Garbling, covering 11 cases across S0 and S1 | 2 |
+
+S1 imports all ten native gate families, including exact permutations, packed-word hash gates and finalized witness-domain constraints. It binds constants and every public output. A compact all-gate fixture garbled to **43,055 ciphertexts**, accepted its valid witness and rejected five adversarial witnesses. A larger fixture built by upstream's actual finalizer matched the native checker across **108 canonical mutations**. See [S1.md](S1.md) and [S1_RESULTS.json](S1_RESULTS.json) for the precise fixture boundaries and measurements.
+
+## S0 measurements retained
+
+The original S0 code was tested at `41a4b00820211823058f7f2a77f57cef3105985e`. Its pinned-root opening emitted 57,929 ciphertexts, accepted a valid opening and rejected four mutations. These checks continue to pass in the S1 workflow.
+
+| S0 component | Measured AND-class gates |
+| --- | ---: |
+| M31 addition, subtraction and multiplication combined | 2,362 |
 | QM31 multiplication | 22,859 |
 | Standard Blake2s hash of 64 variable bytes | 15,221 |
 | Two-column, depth-three uniform Merkle opening | 57,929 |
 
-Core tests took 0.06 seconds after compilation. The garbling test took 0.20 seconds across all five cases, including plain execution and garble/evaluate checks. These are hosted-runner test timings. They do not measure a complete STARK verifier. Exact job IDs, artifact hashes and scope flags are recorded in [RESULTS.json](RESULTS.json).
+Historical S0 timings and artifact hashes remain in [RESULTS.json](RESULTS.json). Component gate counts provide no complete-verifier size estimate.
 
-## Upstream profile
+## Upstream and interfaces
 
-Upstream: `starkware-libs/proving` at `e9a38e12d09979f7a8625e233a80fecac6c38f02`. Exact source blobs are in [upstream.json](upstream.json). This targets standard Blake2s, with M31 and the CM31/QM31 extension tower. The channel sampling schedule follows that commit, including the draw/mix domain-separation byte and four coefficients computed as adjacent reduced words `a + 2*b`.
+Upstream source is pinned to `starkware-libs/proving` commit `e9a38e12d09979f7a8625e233a80fecac6c38f02`. S0 primitive source hashes are listed in [upstream.json](upstream.json). Its hash profile uses standard Blake2s with M31 and the CM31/QM31 tower. Blake2s-M31 and Poseidon profiles require separate end-to-end compatibility evidence.
 
-The separate Blake2s-M31 and Poseidon profiles require their own compatibility work. An actual Shinigami proof must be matched to its producer version and verifier profile before integration.
+`core/` and `lowering/` require no third-party runtime dependencies. `adapter/` lowers the Boolean operations into the existing repository garbler with parent default features disabled, including SP1 soldering. `upstream/` compiles actual native gate and field code, imports finalized circuit constraints, and pins caller-supplied expected outputs. The caller must select a trusted circuit and statement independently of the proof witness.
 
-## Run bounded component tests
+The complete upstream STARK verification function has not yet been instantiated through the importer. S1's compiled native tests use synthetic circuits with upstream finalization. Authentic Shinigami proofs must be matched to their exact producer version, proof profile and public-output contract.
+
+## Run the tests
 
 From the repository root:
 
 ```sh
 python3 nova-bitvm3/stark-bitvm3/reference_vectors.py
 cargo +1.90.0 test --locked --manifest-path nova-bitvm3/stark-bitvm3/core/Cargo.toml -- --nocapture --test-threads=2
-cargo +1.90.0 test --manifest-path nova-bitvm3/stark-bitvm3/adapter/Cargo.toml --test garbled -- --nocapture --test-threads=1
+cargo +1.90.0 test --locked --manifest-path nova-bitvm3/stark-bitvm3/lowering/Cargo.toml --features test-utils -- --nocapture --test-threads=2
+cargo +1.90.0 test --manifest-path nova-bitvm3/stark-bitvm3/adapter/Cargo.toml --tests -- --nocapture --test-threads=1
+cargo +1.94.0 test --manifest-path nova-bitvm3/stark-bitvm3/upstream/Cargo.toml --test conformance -- --nocapture --test-threads=1
 ```
 
-The Python step must run before compiling the core tests because those tests include the generated vectors. The core crate has no third-party dependencies. Its SHA-256-pinned vectors come from `hashlib.blake2s` and integer arithmetic, with three literal upstream known-answer vectors anchoring the hash/channel conventions. These are synthetic component data. Upstream Stwo itself was not compiled in this milestone.
+Generate the Python vectors before compiling the core integration tests. The generated vectors are SHA-256-pinned and checked against three literal upstream known-answer tests. CI retains resolved adapter/upstream lockfiles with the logs. Test-only fixed seeds and direct access to garbled labels are unsuitable for deployment.
 
-The adapter calls the existing repository circuit builder in execute, garble and evaluate modes. It disables parent default features, including SP1 soldering. Its test uses fixed seeds and direct input-label access solely for local correctness checks. CI retains the resolved adapter lockfile as an artifact.
+All default jobs are bounded CPU tests. Prover features are checked in the dependency graph, and no Nova or Stwo proof generation runs. Only the focused workflow ran on the tested branch push.
 
-CI limits the component job to five minutes and the adapter job to ten, with shorter command timeouts. Only the focused workflow ran on the tested branch push. No Nova or full STARK proof was generated.
+## Required before application use
 
-## Implemented
+An authentic proof must pass the complete pinned STARK relation, including transcript scheduling, AIR/composition evaluation, OODS, FRI and all PCS openings. Cairo program and public outputs must bind the application statement. Ark exit/forfeit rules and UTXORef authorization/state transitions need independent application checks. Bitcoin dispute transactions and setup assumptions require their own adversarial tests.
 
-Canonical M31 decoding and reduction, base-field arithmetic, QM31 multiplication and checked inverse witnesses, standard Blake2s-256, channel mixing and sampling, PoW nonce checking, and a uniform-height lifted-Merkle opening checker with all index bits constrained. The public circuit shape never depends on private witness values.
-
-The tests check field aliases, zero inverse witnesses, hash block boundaries, transcript draw/reset order, mutation of the leaf and each sibling, root mismatch, and out-of-range query indices. The pinned-root garbling test checks the active output label against both possible labels.
-
-## Remaining acceptance requirements
-
-FRI, OODS, AIR constraints, complete transcript scheduling, mixed-height PCS opening checks and Cairo program/public-output binding still need integration. A root supplied freely by the prover does not authenticate the application statement: callers must derive or pin it through the complete verifier relation. Every external field validity bit and inverse-witness check must reach acceptance.
-
-Ark exit/forfeit rules and UTXORef authorization/state transitions are separate application relations. Bitcoin dispute transactions and security review remain separate requirements. See [NEXT.md](NEXT.md) for the bounded continuation plan.
-
-Do not route deposits, exits, or production proof receipts through S0.
+Do not route deposits, exits or production proof receipts through this prototype. The continuation is specified in [NEXT.md](NEXT.md).

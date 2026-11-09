@@ -1,0 +1,97 @@
+{
+  "stage": "S1: finalized upstream circuit import and Boolean constraint lowering",
+  "tested_commit": "315837b4e32bead8e012f53e0b4a73ebdc0fd195",
+  "upstream_repository": "starkware-libs/proving",
+  "upstream_commit": "e9a38e12d09979f7a8625e233a80fecac6c38f02",
+  "workflow_run": 42627178138,
+  "workflow_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42627178138",
+  "jobs": {
+    "components": {
+      "id": 129193831285,
+      "conclusion": "success",
+      "s0_tests_passed": 8,
+      "s1_lowering_tests_passed": 6,
+      "rust_toolchain": "1.90.0"
+    },
+    "tiny_garbling": {
+      "id": 129193831158,
+      "conclusion": "success",
+      "rust_tests_passed": 2,
+      "s0_merkle_cases": 5,
+      "s1_all_gate_cases": 6,
+      "s1_test_seconds": 0.14,
+      "s0_test_seconds": 0.25,
+      "cargo_compile_seconds_with_dependency_cache": 12.81,
+      "rust_toolchain": "1.90.0"
+    },
+    "upstream_conformance": {
+      "id": 129193830737,
+      "conclusion": "success",
+      "rust_tests_passed": 3,
+      "canonical_mutation_comparisons": 108,
+      "additional_noncanonical_alias_cases": 8,
+      "test_seconds": 0.41,
+      "cargo_compile_seconds": 46.73,
+      "rust_toolchain": "1.94.0"
+    }
+  },
+  "rust_tests_passed_total_including_s0": 19,
+  "gate_families": ["Add", "Sub", "Mul", "PointwiseMul", "Eq", "TripleXor", "M31ToU32", "BlakeG", "Permutation", "Output"],
+  "circuits": {
+    "synthetic_all_gate_garbling_fixture": {
+      "variables": 24,
+      "constraints": 11,
+      "and_gates": 43055,
+      "ciphertexts_per_case": 43055,
+      "cases": [
+        {"case": 0, "mutation": null, "accepted": true},
+        {"case": 1, "mutation": "multiplication result", "accepted": false},
+        {"case": 2, "mutation": "packed-word extension limb", "accepted": false},
+        {"case": 3, "mutation": "permutation multiplicity", "accepted": false},
+        {"case": 4, "mutation": "expected public output", "accepted": false},
+        {"case": 5, "mutation": "entire witness set to zero", "accepted": false}
+      ]
+    },
+    "actual_upstream_finalized_synthetic_fixture": {
+      "variables": 287,
+      "constraints": 278,
+      "and_gates": 349829,
+      "upstream_native_check_executed": true,
+      "boolean_check_executed": true,
+      "garbled_in_this_milestone": false,
+      "note": "Upstream finalization adds constant construction and guessed-variable domain constraints. This fixture differs from the compact hand-built garbling fixture."
+    }
+  },
+  "artifact_evidence": {
+    "components": {"id": 13679630326, "zip_sha256": "25e7d954a74b2bfe7d62d6cd4217d92b7d9a55a36c59b3e54ec928a8381bfa81"},
+    "garbling": {"id": 13679820316, "zip_sha256": "ccb0c05a9b29df98bc4f48a5a5a6c7225093323e03ae0a441e7bc62a0e327f48", "includes": ["garbled.txt", "dependencies.txt", "adapter-Cargo.lock"]},
+    "upstream": {"id": 13679690685, "zip_sha256": "1eaa3b19d6e7fbea658191b0b5dff1c9951bcac3e6bf3d9e616ecc4928c67abc", "includes": ["upstream.txt", "upstream-dependencies.txt", "upstream-Cargo.lock"]}
+  },
+  "scope": {
+    "all_upstream_gate_families_imported": true,
+    "actual_upstream_native_code_compiled": true,
+    "actual_upstream_finalizer_executed": true,
+    "synthetic_gate_relation_verified": true,
+    "complete_stark_verifier_instantiated": false,
+    "authentic_stark_proof_verified": false,
+    "shinigami_proof_verified": false,
+    "bitcoin_dispute_protocol_tested": false,
+    "nova_proving_launched": false,
+    "stwo_proving_launched": false,
+    "formal_compiler_correctness_proof": false
+  },
+  "acceptance_contract": "The circuit template and expected public bindings are trusted, fixed inputs to Program construction. Only the raw witness is adversarial. Canonicality, gate constraints and all bindings are conjoined into one Boolean output.",
+  "initial_build_failure": {
+    "commit": "bd6da34ee2e8a210ee248367e81990e88594bd24",
+    "run": 42626282830,
+    "reason": "Pinned upstream common uses LazyLock::get, unavailable on Rust 1.90.",
+    "resolution": "Use Rust 1.94 for upstream conformance only; upstream source commit unchanged."
+  },
+  "notes": [
+    "108 comparisons mutate one limb of the first 27 canonical upstream values. They compare acceptance with the native relation plus identical fixed public policy; they are not 108 distinct proofs or a claim that every mutation rejects.",
+    "Output::check alone leaves a public-interface obligation. The all-zero regression shows why the adapter must bind zero, one, u, constants and expected outputs. This is not a finding against upstream's surrounding proof-system contract.",
+    "Garbled tests check the expected label and inequality with its opposite. Fixed seeds and direct label access are test-only conventions.",
+    "Test timings exclude compilation and setup. The six-case S1 time includes plain execution as well as garble/evaluate passes.",
+    "No complete Stwo/Cairo verifier gate count or cost estimate follows from these component fixtures."
+  ]
+}
