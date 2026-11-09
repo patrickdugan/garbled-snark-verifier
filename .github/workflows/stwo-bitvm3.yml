@@ -34,3 +34,33 @@ jobs:
         with:
           name: stwo-components-${{ github.sha }}
           path: nova-bitvm3/stark-bitvm3/ci/
+  tiny-garbling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90.0
+      - name: Cache CPU adapter dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nova-bitvm3/stark-bitvm3/adapter
+      - name: Verify dependency boundary and garble only the bounded opening gadget
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p nova-bitvm3/stark-bitvm3/ci
+          cargo tree --manifest-path nova-bitvm3/stark-bitvm3/adapter/Cargo.toml -e normal > nova-bitvm3/stark-bitvm3/ci/dependencies.txt
+          if grep -E 'sp1-(prover|sdk|build)|cuda' nova-bitvm3/stark-bitvm3/ci/dependencies.txt; then
+            echo 'Unexpected prover dependency in component CI'; exit 1
+          fi
+          timeout 420s cargo test --manifest-path nova-bitvm3/stark-bitvm3/adapter/Cargo.toml --test garbled -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/garbled.txt
+          cp nova-bitvm3/stark-bitvm3/adapter/Cargo.lock nova-bitvm3/stark-bitvm3/ci/adapter-Cargo.lock
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stwo-garbling-${{ github.sha }}
+          path: nova-bitvm3/stark-bitvm3/ci/

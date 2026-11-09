@@ -1,0 +1,22 @@
+[package]
+name = "stwo-bitvm3-adapter"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+license = "GPL-3.0-only"
+description = "Stwo Boolean primitives on the repository garbling engine"
+
+[workspace]
+
+[dependencies]
+stwo-bitvm3-core = { path = "../core" }
+garbled-snark-verifier = { path = "../../..", default-features = false }
+
+[dev-dependencies]
+crossbeam = "0.8"
+rand = "0.8"
+rand_chacha = "0.3"
+
+[profile.test]
+opt-level = 2
