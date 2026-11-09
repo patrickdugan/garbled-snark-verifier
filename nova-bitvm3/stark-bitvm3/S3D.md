@@ -111,3 +111,7 @@ upstream-conformance jobs passed on
 This revision explicitly triggers one reduced-preprocessing native test.
 Its measured result must be documented separately before any additional
 expensive run.
+
+## Cold-build timeout in first native trial
+
+The first opt-in canonical-small trial, run [42723286162](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42723286162) on `657a63d`, passed source preflight and got as far as compiling `stwo-cairo-dev-utils`. Its 360-second cold-build deadline expired before the binary was produced. No native proving started and the 4 GiB RSS hypothesis remains untested for this profile. The next opt-in trial extends only the **build** deadline to 600 seconds within a 15-minute job cap; native proving remains limited to 120 seconds under the 4 GiB sampled RSS watchdog. All routine component jobs retain their previous bounds.

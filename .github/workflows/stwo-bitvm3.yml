@@ -366,7 +366,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.s3_small_profile) ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-small-profile]'))
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       RAYON_NUM_THREADS: '2'
       CARGO_BUILD_JOBS: '2'
@@ -399,7 +399,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/check_low_memory_profile.py --upstream vendor/stwo-cairo | tee out/small-profile-preflight.json
-          timeout --kill-after=5s 360s cargo +nightly-2025-06-23 build --locked \
+          timeout --kill-after=5s 600s cargo +nightly-2025-06-23 build --locked \
             --profile witness-opt-1 \
             --manifest-path vendor/stwo-cairo/stwo_cairo_prover/Cargo.toml \
             -p stwo-cairo-dev-utils --bin prove 2>&1 | tee out/small-profile-build.txt

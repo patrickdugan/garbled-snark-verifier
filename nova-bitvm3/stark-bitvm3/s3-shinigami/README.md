@@ -32,3 +32,7 @@ python3 tools/audit_execution.py out/execution.txt
 ```
 
 `tools/prove_once.py --prove` is a separate, explicitly opted-in experiment. It enforces its memory/file limits and command deadlines, writes each stage's return code and preserves failure evidence. The known allocation failure is recorded in S3_RESULTS.json; default CI does not retry it. No Nova proving is part of this package.
+
+## Independent receipt equality policy (S3e-preflight)
+
+The proof-free Python `tools/receipt_policy.py` encodes the exact Shinigami Cairo public-output words for the scoped Ark CSV and UTXORef hashlock requests, including full transaction bytes, prevout script/amount/height, request ID, verdict and double-SHA-256 transaction hash. `tools/test_receipt_policy.py` checks both accepted fixture formats against their input serializers, including the previously captured 21-word CSV receipt; it rejects every individual public-output word mutation, context substitutions and noncanonical Cairo values. The function's result always marks STARK proof, program identity, chain spendability and application-state verification as **false**. These checks are a consumer-side equality contract and must never be used as a settlement authorization. The producer-version mismatch with S2 remains open.
