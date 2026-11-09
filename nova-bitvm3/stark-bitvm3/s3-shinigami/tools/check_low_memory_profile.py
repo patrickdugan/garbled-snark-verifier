@@ -79,7 +79,7 @@ def verify_upstream_checkout(root: Path) -> str:
       (source,'pub const CANONICAL_SMALL: u32 = 10161776;'),
       (source,'pub const SMALL_MAX_SEQUENCE_LOG_SIZE: u32 = 20;'),
       (proving,'preprocessed_trace: PreProcessedTraceVariant::Canonical,'),
-      (proving,'pub store_polynomials_coefficients: bool;')
+      (proving,'pub store_polynomials_coefficients: bool,')
     ]:
         if term not in filename.read_text():
             raise ValueError('upstream preprocessed semantics differ from the pin: '+term)
