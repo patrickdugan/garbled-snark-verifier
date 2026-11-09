@@ -78,3 +78,5 @@ pub fn main(request: Request) -> Receipt {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod hash_tests;

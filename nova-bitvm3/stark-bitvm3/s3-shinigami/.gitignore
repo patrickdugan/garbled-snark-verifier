@@ -2,4 +2,5 @@
 /target/
 /out/
 /src/tests.cairo
+/src/hash_tests.cairo
 **/__pycache__/
