@@ -19,6 +19,10 @@ on:
         description: 'Permit one 120-second native Cairo proof attempt'
         type: boolean
         default: false
+      s3_rss_probe:
+        description: 'Try the frozen Cairo trace once with observed RSS guard'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -44,6 +48,7 @@ jobs:
           python3 nova-bitvm3/stark-bitvm3/reference_vectors.py --check
           timeout 120s cargo +1.90.0 test --locked --manifest-path nova-bitvm3/stark-bitvm3/core/Cargo.toml -- --nocapture --test-threads=2 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/components.txt
           timeout 120s cargo +1.90.0 test --locked --manifest-path nova-bitvm3/stark-bitvm3/lowering/Cargo.toml --features test-utils -- --nocapture --test-threads=2 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/lowering.txt
+          timeout 20s python3 -m unittest discover -s nova-bitvm3/stark-bitvm3/s3-shinigami/tools -p 'test_*.py' -v 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/rss-guard-tests.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -219,3 +224,69 @@ jobs:
         with:
           name: shinigami-s3-${{ github.sha }}
           path: nova-bitvm3/stark-bitvm3/s3-shinigami/out/
+
+  s3-rss-probe:
+    # Changed hypothesis: the old 6 GiB RLIMIT_AS rejected a virtual-memory
+    # reservation. Reuse exact saved bytes with sampled 4 GiB RSS, once only.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.s3_rss_probe) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-rss-probe]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RAYON_NUM_THREADS: '2'
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: starkware-bitcoin/shinigami
+          ref: 7e8c05d60b4bd7ae91ddc18a42e8e13090286f0c
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/shinigami
+      - uses: actions/checkout@v4
+        with:
+          repository: j1mbo64/ripemd160_cairo
+          ref: cdc5ab58b0acc64db87e0b03851fb18213977dc8
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/ripemd160
+      - uses: actions/checkout@v4
+        with:
+          repository: j1mbo64/sha1_cairo
+          ref: 280b4c64ae457fdc4bd7cd807efd17e8dced654e
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/sha1
+      - uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: 2.18.0
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 42642735526
+          name: shinigami-s3-c8894f4ee6023ca1d0544b6c8c62571c426f1072
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/out/frozen/
+      - name: Rebuild pinned executable without proof generation
+        working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/prepare.py
+          python3 tools/cases.py out
+          scarb --version | tee out/rss-toolchain.txt
+          timeout --kill-after=5s 180s scarb build 2>&1 | tee out/rss-build.txt
+      - name: Single saved-input proving probe, 4 GiB RSS and 120 s
+        working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No ulimit -v. The watchdog checks resident pages for the process
+          # group and records virtual size separately, with an explicit timeout.
+          python3 tools/prove_saved.py --prove-saved --source out/frozen --rss-mib 4096 --timeout-seconds 120
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shinigami-s3-rss-${{ github.sha }}
+          path: |
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/rss-*.txt
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/rss-proof-report.json
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/native-proof.json
+          if-no-files-found: warn
