@@ -1,23 +1,13 @@
 # S2 bounded full-verifier laboratory
 
-This opt-in executable uses the authentic squared-Fibonacci example in the pinned upstream prover. It generates traces of 32 and 16 rows, writes a frozen proof bundle, checks that bundle with the standalone native Stwo verifier, instantiates the complete upstream arithmetic-circuit verifier independently of the proof, and lowers that relation through S1.
+The authentic pinned upstream squared-Fibonacci proof has passed native, complete Boolean and full garbled checks. Read [../S2.md](../S2.md) and [../S2_RESULTS.json](../S2_RESULTS.json) for exact evidence and reproduction commands.
 
-The statement fixes the component sizes, preprocessing root and empty public claim. The native verifier reconstructs its lookup challenges and checks the expected public sums. Boolean acceptance includes all imported constraints and canonical witness encodings. The generator's source revision is pinned to `e9a38e12d09979f7a8625e233a80fecac6c38f02`.
+`src/main.rs` offers explicit `generate DIR` and `check DIR EXPECTED_SHA256` commands. Generation uses 32/16-row traces with upstream's weak test FRI parameters. The check builds its full NoValue template independently of the proof and re-synthesizes auxiliary witnesses for five changed-proof cases. Canonicality and expected-policy mismatches are tested separately.
 
-The FRI configuration intentionally uses upstream test settings: 3 queries, blowup factor 4 and 10 FRI PoW bits. Upstream's FRI accounting gives 16 bits for this test configuration. It has no production-security claim. This is an upstream example AIR, not a Shinigami/Cairo execution proof or a Bitcoin settlement implementation.
+`src/bin/s2-garble.rs` reconstructs the fixed template from trusted source, compares its hash with the successful native/Boolean run, validates exact frozen witness hashes and runs the full relation through the repository garbler. Enable it with `--features garbled`. Ciphertexts stream to a bounded temporary file outside the uploaded evidence directory. Both active-label correctness and ciphertext-stream hashes are checked.
 
-## Explicit commands
+This example has 16 bits under upstream's FRI security accounting and is unsuitable for production. It is an example AIR rather than a Cairo/Shinigami execution statement. Bitcoin disputes and Ark/UTXORef application semantics remain separate requirements.
 
-```sh
-cargo +nightly-2026-03-06 build --manifest-path nova-bitvm3/stark-bitvm3/s2-lab/Cargo.toml
-BIN=nova-bitvm3/stark-bitvm3/s2-lab/target/debug/stwo-bitvm3-s2-lab
-OUT=nova-bitvm3/stark-bitvm3/s2-lab/out
-timeout --kill-after=5s 60s "$BIN" generate "$OUT"
-timeout --kill-after=5s 180s "$BIN" check "$OUT" "$(cat "$OUT/bundle.sha256")"
-```
+Routine CI skips this laboratory. An explicit `[s2-fixture]` marker or manual `s2_fixture=true` enables a ten-minute CPU job with fixed command deadlines and a 6 GiB runtime memory cap. The final workflow downloads the saved proof instead of regenerating it. No Nova, SP1 or CUDA proof is generated.
 
-The expected digest is an external fixture-policy input. A digest supplied alongside an adversarial proof is not an authentication mechanism.
-
-Generation is outside routine component CI. The extra laboratory job runs only for an explicit `[s2-fixture]` commit marker or a manual dispatch with `s2_fixture=true`. It has a ten-minute job cap, two CPU workers and a 6 GiB virtual-memory cap during execution. Compilation and runtime have separate deadlines. No SP1, Nova or CUDA prover is invoked.
-
-Results are written only after the corresponding assertions pass. Mutated converted proof fields get newly synthesized internal values; every resulting graph must equal the independent template. Artifacts include the actual proof bundle, exact template digest, witness files and dependency lockfile. Complete garbled execution is a subsequent check and is recorded separately.
+The source artifact has finite retention. Archive the evidence ZIP, including Cargo.lock, before its February 7, 2027 expiry. Copy the saved lockfile into this crate and build with `--locked` for reproduction. Seeds and direct label selection in the garbling test are test-only conventions.

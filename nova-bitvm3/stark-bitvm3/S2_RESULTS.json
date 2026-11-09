@@ -1,0 +1,112 @@
+{
+  "stage": "S2: authentic small STARK through native, Boolean and garbled verification",
+  "tested_commit": "f90a7095f0cb4541b3eae73877e278cd70f79f2b",
+  "first_native_boolean_commit": "2e107d2f4423887e80c834e4a2a0f22a34640b2c",
+  "upstream_repository": "starkware-libs/proving",
+  "upstream_commit": "e9a38e12d09979f7a8625e233a80fecac6c38f02",
+  "workflow_run": 42633574320,
+  "workflow_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42633574320",
+  "first_native_boolean_run": 42632483370,
+  "jobs": {
+    "components": {"id": 129215788950, "conclusion": "success", "rust_tests": 14},
+    "upstream_conformance": {"id": 129215788990, "conclusion": "success", "rust_tests": 3},
+    "tiny_garbling": {"id": 129215789350, "conclusion": "success", "rust_tests": 2},
+    "s2_fixture": {"id": 129215788732, "conclusion": "success", "backend_unit_tests": 1}
+  },
+  "rust_tests_total": 20,
+  "fixture": {
+    "air": "pinned upstream squared-Fibonacci example with public lookup sums",
+    "trace_rows": [32, 16],
+    "bundle_json_bytes_including_auxiliary_data": 43220,
+    "bundle_sha256": "735bf38f3d45a8ef537279d8f4e244b11afee2863ac91ebcab5d079195365210",
+    "valid_witness_sha256": "73f417a3ccd0d9929ce213f2f719fe7d9733bdc461166adfcb7f8ddcada53881",
+    "mutated_auth_path_witness_sha256": "ade28229e0e337bb760a3a6d4ceafa340b11fd163c250d13ac884b9eaa83f732",
+    "raw_witness_bytes_including_internal_values": 1525872,
+    "generation_seconds_including_native_verification": 0.010433235,
+    "fri_params": {"fold_step": 1, "log_blowup_factor": 2, "log_last_layer_degree_bound": 0, "n_queries": 3, "pow_bits": 10},
+    "fri_security_bits_upstream_test_accounting": 16,
+    "production_security": false
+  },
+  "fixed_template": {
+    "template_debug_sha256": "b06319b9e4f7ee9b059e0a5ada2bdad6fc4d16ea938e459dd0cc53a069fd479d",
+    "variables": 95367,
+    "constraints": 36833,
+    "input_bits": 12206976,
+    "and_gates": 141577483,
+    "xor_gates": 269237414,
+    "built_without_proof_values": true,
+    "policies": ["pinned upstream AIR", "fixed component sizes", "fixed preprocessing root", "empty public claim", "zero expected channel salt", "canonical witness fields", "all constants and expected outputs"]
+  },
+  "native_boolean_checks": {
+    "standalone_native_stark_verifier": "accept",
+    "valid_finalized_relation": "accept",
+    "valid_boolean_relation": "accept",
+    "check_seconds_in_latest_run": 5.724040949,
+    "peak_rss_kib_in_latest_run": 414848,
+    "cases": [
+      {"name": "authentic", "accepted": true},
+      {"name": "trace_oods", "accepted": false, "auxiliaries_resynthesized": true},
+      {"name": "claimed_sum", "accepted": false, "auxiliaries_resynthesized": true},
+      {"name": "fri_witness", "accepted": false, "auxiliaries_resynthesized": true},
+      {"name": "fri_final_coefficient", "accepted": false, "auxiliaries_resynthesized": true},
+      {"name": "trace_auth_path", "accepted": false, "auxiliaries_resynthesized": true},
+      {"name": "noncanonical_zero_alias", "accepted": false},
+      {"name": "wrong_expected_salt", "accepted": false}
+    ],
+    "note": "The five converted-proof mutations recompute internal auxiliary values and are checked against the unchanged native finalized relation and Boolean template. The other two cases exercise raw encoding and expected-policy binding."
+  },
+  "garbling": {
+    "ciphertexts": 141577483,
+    "ciphertext_bytes": 2265239728,
+    "ciphertext_blake3": "5e752138b6a38b14875b9dfb1051211457036580a009671db68fa6ef099d9c52",
+    "garble_seconds": 24.70863246,
+    "live_wire_capacity": 16777216,
+    "total_command_wall_seconds_including_rechecks": 64.93,
+    "peak_rss_kib_for_full_command": 3489956,
+    "cases": [
+      {"name": "authentic", "accepted": true, "evaluation_seconds": 19.280669848},
+      {"name": "trace_auth_path", "accepted": false, "evaluation_seconds": 19.275135302}
+    ],
+    "expected_output_labels_checked": true,
+    "opposite_labels_rejected": true,
+    "ciphertext_hashes_checked": true,
+    "counts_match_boolean_evaluation": true,
+    "disk_scratch_deleted": true,
+    "test_only_fixed_seed_and_direct_label_selection": true,
+    "note": "Ciphertext bytes are off-chain laboratory data. They do not measure Bitcoin transaction bytes. The peak memory covers the whole garble/evaluate command."
+  },
+  "artifacts": {
+    "full_evidence": {"id": 13680899049, "run": 42633574320, "zip_sha256": "8c03bce3d5db709766908039bd8765cf3bc213d831e5ffef8cb0527a491425d1", "zip_bytes": 3858790, "expires_at": "2027-02-07T14:19:38Z"},
+    "source_fixture": {"id": 13680649206, "run": 42632483370, "zip_sha256": "be090075311ccf059013b436d885bc99a3728a9c72725564451d28bd25130752", "expires_at": "2027-02-07T14:12:58Z"}
+  },
+  "budget": {
+    "default_ci_generates_proofs": false,
+    "full_experiment_opt_in": true,
+    "job_minutes": 10,
+    "cpu_build_workers": 2,
+    "runtime_virtual_memory_gib": 6,
+    "runtime_command_timeout_seconds": 180,
+    "max_nonfree_gates": 150000000,
+    "max_total_direct_wires": 1000000000
+  },
+  "scope": {
+    "authentic_upstream_stark_verified": true,
+    "complete_upstream_verifier_instantiated": true,
+    "complete_boolean_relation_verified": true,
+    "complete_garbled_relation_verified": true,
+    "shinigami_or_cairo_execution_proof_verified": false,
+    "production_security_profile_verified": false,
+    "ark_or_utxoref_application_relation_verified": false,
+    "bitcoin_dispute_protocol_tested": false,
+    "formal_compiler_correctness_proof": false,
+    "nova_proving_launched": false,
+    "sp1_or_cuda_proving_launched": false
+  },
+  "notes": [
+    "The genuine 32/16-row proof was generated once in the explicit laboratory run. The final run downloads that exact frozen fixture and generates no new proof.",
+    "The source artifact has finite retention. Keep an independent copy of the evidence archive; the current optional workflow depends on that source artifact and fails if it expires.",
+    "results.json in the evidence archive describes the native/Boolean command and therefore has full_garbled_run=false. The separate garbling.json records the subsequent completed garbled command. This consolidated file records both phases.",
+    "Timings are hosted-runner observations with compilation excluded; build workers are capped at two, while runtime measurements use approximately one CPU core.",
+    "No performance comparison with the existing SP1/Nova route is implied: the application statements and security parameters differ."
+  ]
+}
