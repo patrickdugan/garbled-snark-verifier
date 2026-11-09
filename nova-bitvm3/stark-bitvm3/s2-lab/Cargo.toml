@@ -1,0 +1,31 @@
+[package]
+name = "stwo-bitvm3-s2-lab"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-only"
+description = "Opt-in bounded genuine-STARK experiment; weak test parameters, never production"
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+hex = "0.4"
+indexmap = "2"
+num-traits = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+stwo-bitvm3-core = { path = "../core" }
+stwo-bitvm3-lowering = { path = "../lowering" }
+stwo-bitvm3-upstream = { path = "../upstream" }
+circuits = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+circuits-stark-verifier = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+circuits-stark-verifier-examples = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+stwo = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02", features = ["prover"] }
+stwo-constraint-framework = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02", features = ["prover"] }
+
+[profile.dev]
+opt-level = 2
+debug = 0
+incremental = false

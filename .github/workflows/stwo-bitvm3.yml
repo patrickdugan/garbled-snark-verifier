@@ -6,6 +6,11 @@ on:
   pull_request:
     paths: ['nova-bitvm3/stark-bitvm3/**', '.github/workflows/stwo-bitvm3.yml']
   workflow_dispatch:
+    inputs:
+      s2_fixture:
+        description: 'Explicitly run the bounded tiny-STARK laboratory'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -73,7 +78,6 @@ jobs:
       RUSTFLAGS: '-C debuginfo=0'
     steps:
       - uses: actions/checkout@v4
-      # LazyLock::get in pinned upstream common requires this stable toolchain.
       - uses: dtolnay/rust-toolchain@1.94.0
       - uses: Swatinem/rust-cache@v2
         with:
@@ -95,3 +99,43 @@ jobs:
         with:
           name: stwo-upstream-${{ github.sha }}
           path: nova-bitvm3/stark-bitvm3/ci/
+  s2-fixture:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.s2_fixture) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[s2-fixture]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      RAYON_NUM_THREADS: '2'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly-2026-03-06
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nova-bitvm3/stark-bitvm3/s2-lab
+          cache-on-failure: true
+      - name: Compile isolated tiny-STARK laboratory
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=nova-bitvm3/stark-bitvm3/s2-lab/out
+          mkdir -p "$OUT"
+          timeout --kill-after=5s 360s cargo +nightly-2026-03-06 build --manifest-path nova-bitvm3/stark-bitvm3/s2-lab/Cargo.toml 2>&1 | tee "$OUT/build.txt"
+          cp nova-bitvm3/stark-bitvm3/s2-lab/Cargo.lock "$OUT/Cargo.lock"
+      - name: Generate one bounded authentic example proof and check the full relation
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -v 6291456
+          OUT=nova-bitvm3/stark-bitvm3/s2-lab/out
+          BIN=nova-bitvm3/stark-bitvm3/s2-lab/target/debug/stwo-bitvm3-s2-lab
+          /usr/bin/time -v timeout --kill-after=5s 60s "$BIN" generate "$OUT" 2>&1 | tee "$OUT/generation.txt"
+          /usr/bin/time -v timeout --kill-after=5s 180s "$BIN" check "$OUT" "$(cat "$OUT/bundle.sha256")" 2>&1 | tee "$OUT/check.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stwo-s2-fixture-${{ github.sha }}
+          path: nova-bitvm3/stark-bitvm3/s2-lab/out/
