@@ -1,0 +1,36 @@
+name: Stwo BitVM3 component checks
+on:
+  push:
+    branches: ['main', 'feat/stwo-bitvm3-*']
+    paths: ['nova-bitvm3/stark-bitvm3/**', '.github/workflows/stwo-bitvm3.yml']
+  pull_request:
+    paths: ['nova-bitvm3/stark-bitvm3/**', '.github/workflows/stwo-bitvm3.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: stwo-bitvm3-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  components:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90.0
+      - name: Deterministic native references and bounded Boolean tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p nova-bitvm3/stark-bitvm3/ci
+          python3 nova-bitvm3/stark-bitvm3/reference_vectors.py
+          python3 nova-bitvm3/stark-bitvm3/reference_vectors.py --check
+          timeout 120s cargo test --locked --manifest-path nova-bitvm3/stark-bitvm3/core/Cargo.toml -- --nocapture --test-threads=2 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/components.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stwo-components-${{ github.sha }}
+          path: nova-bitvm3/stark-bitvm3/ci/

@@ -1,0 +1,19 @@
+{
+  "repository": "starkware-libs/proving",
+  "commit": "e9a38e12d09979f7a8625e233a80fecac6c38f02",
+  "profile": "standard Blake2s256; M31/CM31/QM31; uniform-height lifted Merkle path",
+  "stage": "S0 Boolean components",
+  "full_stark_verifier": false,
+  "authentic_shinigami_proof_tested": false,
+  "bitcoin_dispute_protocol_tested": false,
+  "sources": {
+    "crates/stwo/src/core/channel/blake2s.rs": "5457f5ae6a7c562287577a67c07a003f5c3ea65b",
+    "crates/stwo/src/core/vcs/blake2_hash.rs": "c5fcba64f730f14699ee4043716274cdde70392b",
+    "crates/stwo/src/core/vcs_lifted/blake2_merkle.rs": "b34267e3a24c555f94260611d3341503c7e8ca14",
+    "crates/stwo/src/core/fields/qm31.rs": "e7a3d740df98d312434c95f0adb7c3d24a578937",
+    "crates/stark_verifier/src/verify.rs": "8a104de70312b9d50c4a02146ead95e9a03fd880",
+    "crates/circuits/src/circuit.rs": "48ac22907e71c51d551aef987e588e018de582e5"
+  },
+  "source_hash_type": "git blob SHA-1",
+  "note": "The upstream arithmetic-circuit verifier is a possible next integration target; its complete circuit gate set is not imported by S0. Blake2s-M31 and Poseidon profiles are separate protocols."
+}
