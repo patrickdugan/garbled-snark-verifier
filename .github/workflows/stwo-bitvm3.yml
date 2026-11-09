@@ -23,6 +23,10 @@ on:
         description: 'Try the frozen Cairo trace once with observed RSS guard'
         type: boolean
         default: false
+      s3_standalone_probe:
+        description: 'Try one smaller standalone Cairo execution under RSS guard'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -289,4 +293,63 @@ jobs:
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/rss-*.txt
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/rss-proof-report.json
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/native-proof.json
+          if-no-files-found: warn
+
+  s3-standalone-probe:
+    # The bootloader trace crossed 4 GiB RSS. Try a 157k-step standalone
+    # execution instead of repeating the 2.77m-step bootloader workload.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.s3_standalone_probe) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-standalone-probe]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RAYON_NUM_THREADS: '2'
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: starkware-bitcoin/shinigami
+          ref: 7e8c05d60b4bd7ae91ddc18a42e8e13090286f0c
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/shinigami
+      - uses: actions/checkout@v4
+        with:
+          repository: j1mbo64/ripemd160_cairo
+          ref: cdc5ab58b0acc64db87e0b03851fb18213977dc8
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/ripemd160
+      - uses: actions/checkout@v4
+        with:
+          repository: j1mbo64/sha1_cairo
+          ref: 280b4c64ae457fdc4bd7cd807efd17e8dced654e
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/sha1
+      - uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: 2.18.0
+          cache: false
+      - name: Pin sources, prepare CSV fixture and compile
+        working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/prepare.py
+          python3 tools/cases.py out
+          scarb --version | tee out/standalone-toolchain.txt
+          timeout --kill-after=5s 180s scarb build 2>&1 | tee out/standalone-build.txt
+      - name: Prove a single standalone CSV execution under RSS guard
+        working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/prove_standalone.py --prove-once --rss-mib 4096 --timeout-seconds 120
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shinigami-s3-standalone-${{ github.sha }}
+          path: |
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/standalone-*.txt
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/standalone-*.json
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/standalone-*.gz
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/source-pins.json
           if-no-files-found: warn

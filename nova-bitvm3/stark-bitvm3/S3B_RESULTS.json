@@ -1,0 +1,39 @@
+{
+  "stage": "S3b: saved bootloader trace under an RSS watchdog",
+  "source_run": 42642735526,
+  "source_executable_sha256": "a9bdc409d2f7ee443ac62cabdc8df27fb44c85a435ca9350788bee890f61bef3",
+  "source_prover_input_sha256": "02c8508f635c7934b1a3ac13eedf5545ea4681f1a72edc51685c7b0fd5ccc031",
+  "test_commit": "cdb554d3aa9c3a0e7a5fc70632c84f36cf2825ab",
+  "workflow_run": 42720650399,
+  "workflow_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42720650399",
+  "status": "rss_budget_exceeded",
+  "one_shot_attempts": 1,
+  "native_proof_produced": false,
+  "native_verification_started": false,
+  "elapsed_seconds": 10.116,
+  "peak_rss_bytes": 4304150528,
+  "rss_limit_bytes": 4294967296,
+  "peak_vms_bytes": 14147178496,
+  "peak_processes": 1,
+  "samples": 101,
+  "address_space_rlimit_applied": false,
+  "kernel_enforced_memory_limit": false,
+  "process_group_monitor_interval_ms": 100,
+  "tested_source_fingerprint_validated": true,
+  "python_guard_unit_tests_passed": 8,
+  "routine_rust_ci": "components, upstream conformance, tiny garbling all passed",
+  "artifact": {
+    "id": 13719867898,
+    "name": "shinigami-s3-rss-cdb554d3aa9c3a0e7a5fc70632c84f36cf2825ab",
+    "zip_sha256": "2da595973b1ffb9da66737de4aa0cd4435f20e9528a144bb3bd61b646c855673",
+    "expires_at": "2027-02-07T23:27:52Z"
+  },
+  "scope": {
+    "observed_memory_bottleneck": true,
+    "minimum_physical_memory_for_success_measured": false,
+    "producer_compatible_with_s2": false,
+    "bitvm3_settlement_verified": false,
+    "ark_utxoref_application_verified": false
+  },
+  "note": "RSS reports sample group resident pages; shared mappings may be double counted and abrupt host OOM can occur between samples. The 4 GiB guard ended this single run before proof generation finished."
+}
