@@ -15,6 +15,10 @@ on:
         description: 'Compile and execute the pinned Shinigami receipt laboratory'
         type: boolean
         default: false
+      s3_native_proof:
+        description: 'Permit one 120-second native Cairo proof attempt'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -124,8 +128,6 @@ jobs:
         with:
           workspaces: nova-bitvm3/stark-bitvm3/s2-lab
           cache-on-failure: true
-      # Fixed artifact from the successful native/Boolean run. The executable pins
-      # the bundle, graph and witness digests independently. No proof is regenerated.
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -159,8 +161,8 @@ jobs:
           path: nova-bitvm3/stark-bitvm3/s2-lab/out/
   s3-shinigami:
     if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.s3_execute) ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-execute]'))
+      (github.event_name == 'workflow_dispatch' && (inputs.s3_execute || inputs.s3_native_proof)) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[s3-execute]') || contains(github.event.head_commit.message, '[s3-prove]')))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -187,6 +189,7 @@ jobs:
       - uses: software-mansion/setup-scarb@v1
         with:
           scarb-version: 2.18.0
+          cache: false
       - name: Build and exercise the actual pinned engine
         working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
         shell: bash
@@ -197,12 +200,20 @@ jobs:
           python3 tools/cases.py out
           scarb --version | tee out/toolchain.txt
           cp src/tests.cairo out/generated-tests.cairo
+          cp src/hash_tests.cairo out/generated-hash-tests.cairo
           /usr/bin/time -v timeout --kill-after=5s 180s scarb build 2>&1 | tee out/build.txt
           cp Scarb.lock out/Scarb.lock
           /usr/bin/time -v timeout --kill-after=5s 180s scarb test 2>&1 | tee out/tests.txt
           /usr/bin/time -v timeout --kill-after=5s 60s scarb execute --no-build --arguments-file out/csv_valid.args.json --print-program-output --print-resource-usage 2>&1 | tee out/execution.txt
+          python3 tools/audit_execution.py out/execution.txt
           cp target/dev/*.executable.json out/
           find target/execute -type f -printf '%P %s bytes\n' | tee out/execution-files.txt
+      - name: Explicit bounded native Cairo proof probe
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.s3_native_proof) ||
+          (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-prove]'))
+        working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
+        run: python3 tools/prove_once.py --prove
       - uses: actions/upload-artifact@v4
         if: always()
         with:
