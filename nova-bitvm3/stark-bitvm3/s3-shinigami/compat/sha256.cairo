@@ -22,7 +22,7 @@ pub fn compute_sha256_byte_array(message: @ByteArray) -> [u32; 8] {
     assert(message.len() <= 1048576, 'sha256 input budget');
     let length: u64 = message.len().into();
     let mut padded: ByteArray = "";
-    for i in 0..message.len() { padded.append_byte(message[i]); };
+    for i in 0_u32..message.len() { padded.append_byte(message[i]); };
     padded.append_byte(0x80);
     while padded.len() % 64 != 56 { padded.append_byte(0); };
     padded.append_word((length * 8).into(), 8);
@@ -30,9 +30,9 @@ pub fn compute_sha256_byte_array(message: @ByteArray) -> [u32; 8] {
         0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,
         0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19,
     ];
-    for block in 0..padded.len()/64 {
+    for block in 0_u32..padded.len()/64 {
         let mut words: Array<u32> = array![];
-        for i in 0..16 {
+        for i in 0_u32..16_u32 {
             let base = block*64+i*4;
             let b0: u32 = padded[base].into();
             let b1: u32 = padded[base+1].into();
@@ -40,7 +40,7 @@ pub fn compute_sha256_byte_array(message: @ByteArray) -> [u32; 8] {
             let b3: u32 = padded[base+3].into();
             words.append(b0*0x1000000+b1*0x10000+b2*0x100+b3);
         };
-        for i in 16..64 {
+        for i in 16_u32..64_u32 {
             let x = *words.at(i-15);
             let y = *words.at(i-2);
             let s0 = sha_rotr(x,128) ^ sha_rotr(x,262144) ^ (x/8);
@@ -50,7 +50,7 @@ pub fn compute_sha256_byte_array(message: @ByteArray) -> [u32; 8] {
         let [a0,b0,c0,d0,e0,f0,g0,h0] = state;
         let mut a=a0; let mut b=b0; let mut c=c0; let mut d=d0;
         let mut e=e0; let mut f=f0; let mut g=g0; let mut h=h0;
-        for i in 0..64 {
+        for i in 0_u32..64_u32 {
             let s1=sha_rotr(e,64)^sha_rotr(e,2048)^sha_rotr(e,33554432);
             let ch=(e&f)^((0xffffffff^e)&g);
             let t1=sha_add(sha_add(sha_add(h,s1),ch),sha_add(*SHA256_K.span().at(i),*words.at(i)));
