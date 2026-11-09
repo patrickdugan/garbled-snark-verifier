@@ -42,7 +42,7 @@ use stwo::{
         verifier,
     },
 };
-use stwo_constraint_framework::{preprocessed_columns::PreProcessedColumnId, TraceLocationAllocator};
+use stwo_constraint_framework::{preprocessed_columns::PreProcessedColumnId, Relation, TraceLocationAllocator};
 use stwo_bitvm3_lowering::{Limits, Program, Value, UPSTREAM};
 use stwo_bitvm3_upstream::import_finalized;
 
@@ -122,7 +122,7 @@ fn native(bundle: &Bundle) -> Result<()> {
         for j in 0..(1u32 << log_size) {
             let (mut a, mut b) = (M31::one(), M31::from(j));
             for _ in 2..FIB_SEQUENCE_LENGTH { (a,b) = (b, a*a + b*b + M31::from(j)); }
-            let denom: QM31 = lookup.0.combine(&[a,b]);
+            let denom: QM31 = lookup.combine(&[a,b]);
             ensure!(!denom.is_zero(), "zero lookup denominator");
             let inv = denom.inverse(); expected += inv + inv + inv;
         }
