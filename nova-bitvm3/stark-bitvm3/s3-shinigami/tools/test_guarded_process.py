@@ -34,18 +34,21 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(got['status'], 'timeout')
 
     def test_rss_limit(self):
+        baseline = self.run_case('import time;time.sleep(0.4)')['peak_rss_bytes']
+        cap = baseline + 30*1024*1024
         got = self.run_case(
             'import time;x=bytearray(90*1024*1024);time.sleep(1)',
-            rss=130*1024*1024)
+            rss=cap)
         self.assertEqual(got['status'], 'rss_budget_exceeded')
-        self.assertGreater(got['peak_rss_bytes'], 130*1024*1024)
+        self.assertGreater(got['peak_rss_bytes'], cap)
 
     def test_subprocess_is_counted(self):
         code = ("import subprocess,sys,time;"
                 "subprocess.Popen([sys.executable,'-c',"
                 "'import time;x=bytearray(90*1024*1024);time.sleep(2)']);"
                 "time.sleep(2)")
-        got = self.run_case(code, rss=140*1024*1024)
+        baseline = self.run_case('import time;time.sleep(0.4)')['peak_rss_bytes']
+        got = self.run_case(code, rss=baseline + 30*1024*1024)
         self.assertEqual(got['status'], 'rss_budget_exceeded')
         self.assertGreaterEqual(got['peak_processes'], 2)
 
