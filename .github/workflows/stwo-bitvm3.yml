@@ -11,6 +11,10 @@ on:
         description: 'Explicitly verify and garble the frozen test-only STARK fixture'
         type: boolean
         default: false
+      s3_execute:
+        description: 'Compile and execute the pinned Shinigami receipt laboratory'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -153,3 +157,54 @@ jobs:
         with:
           name: stwo-s2-fixture-${{ github.sha }}
           path: nova-bitvm3/stark-bitvm3/s2-lab/out/
+  s3-shinigami:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.s3_execute) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-execute]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RAYON_NUM_THREADS: '2'
+      CARGO_BUILD_JOBS: '2'
+      RUST_MIN_STACK: '16777216'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: starkware-bitcoin/shinigami
+          ref: 7e8c05d60b4bd7ae91ddc18a42e8e13090286f0c
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/shinigami
+      - uses: actions/checkout@v4
+        with:
+          repository: j1mbo64/ripemd160_cairo
+          ref: cdc5ab58b0acc64db87e0b03851fb18213977dc8
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/ripemd160
+      - uses: actions/checkout@v4
+        with:
+          repository: j1mbo64/sha1_cairo
+          ref: 280b4c64ae457fdc4bd7cd807efd17e8dced654e
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/sha1
+      - uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: 2.18.0
+      - name: Build and exercise the actual pinned engine
+        working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -v 6291456
+          python3 tools/prepare.py
+          python3 tools/cases.py out
+          scarb --version | tee out/toolchain.txt
+          cp src/tests.cairo out/generated-tests.cairo
+          /usr/bin/time -v timeout --kill-after=5s 180s scarb build 2>&1 | tee out/build.txt
+          cp Scarb.lock out/Scarb.lock
+          /usr/bin/time -v timeout --kill-after=5s 180s scarb test 2>&1 | tee out/tests.txt
+          /usr/bin/time -v timeout --kill-after=5s 60s scarb execute --no-build --arguments-file out/csv_valid.args.json --print-program-output --print-resource-usage 2>&1 | tee out/execution.txt
+          cp target/dev/*.executable.json out/
+          find target/execute -type f -printf '%P %s bytes\n' | tee out/execution-files.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shinigami-s3-${{ github.sha }}
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/out/
