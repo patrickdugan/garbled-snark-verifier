@@ -5,6 +5,7 @@ import difflib
 import hashlib
 import json
 import subprocess
+from cases import cairo_bytes, CAIRO_BYTE_HELPER
 
 ROOT = Path(__file__).resolve().parents[1]
 PINS = {
@@ -59,13 +60,12 @@ def main():
     },indent=2)+'\n')
     vectors=[b'',b'abc']+[bytes((i*17+3)%256 for i in range(n))
                           for n in (1,31,32,55,56,63,64,65,127,128)]
-    tests=['use shinigami_utils::hash::{compute_sha256_byte_array, double_sha256};']
+    tests=['use shinigami_utils::hash::{compute_sha256_byte_array, double_sha256};',CAIRO_BYTE_HELPER]
     for index,data in enumerate(vectors):
-        literal='"'+''.join(f'\\x{x:02x}' for x in data)+'"'
         digest=hashlib.sha256(data).digest()
         words=','.join(hex(int.from_bytes(digest[i:i+4],'big')) for i in range(0,32,4))
         double=int.from_bytes(hashlib.sha256(digest).digest(),'big')
-        tests += ['#[test]',f'fn sha256_oracle_{index}() {{',f'    let data={literal};',
+        tests += ['#[test]',f'fn sha256_oracle_{index}() {{',f'    let data={cairo_bytes(data.hex())};',
                   f'    assert(compute_sha256_byte_array(@data)==[{words}], \'sha256 mismatch\');',
                   f'    assert(double_sha256(@data)=={hex(double)}, \'double sha256 mismatch\');','}']
     (ROOT/'src/hash_tests.cairo').write_text('\n'.join(tests)+'\n')
