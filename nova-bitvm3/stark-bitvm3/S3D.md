@@ -102,3 +102,12 @@ cargo +nightly-2025-06-23 build --locked --profile witness-opt-1 \
 python3 tools/prove_low_memory.py --prove-small-once \
   --rss-mib 4096 --timeout-seconds 120
 ```
+
+## One-shot test activation
+
+The static profile checks, S0/S1 components, existing garbler and
+upstream-conformance jobs passed on
+[run 42722959438](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42722959438).
+This revision explicitly triggers one reduced-preprocessing native test.
+Its measured result must be documented separately before any additional
+expensive run.
