@@ -13,6 +13,7 @@ brief is meant to start its own session; the session reads this file first.
 | GPU prover | [`prover-gpu`](prover-gpu) | guest A proved on the laptop GPU (03c56e6) |
 | SP1 wrap verifier, native, BLAKE3 transcript v2 | [`m13/verify`](m13/verify) | pins in [`m13/pins.json`](m13/pins.json) |
 | Final verifier as a garbled circuit | [`m14`](m14) | 785,442,492 non-free gates, garbled and evaluated on real proofs |
+| Bitcoin Script (legacy, P2SH, witness v0) as a Nova step, from Shinigami's engine | [`m17`](m17) | 6,808 constraints per step; native engine agrees with Core on all 2,756 non-Taproot vectors; signature, hash and locktime checks deferred to a native claim checker |
 
 ## The interface other projects use
 
