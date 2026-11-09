@@ -6,6 +6,11 @@ edition = "2024_07"
 [workspace]
 
 [executable]
+# The upstream engine contains signature syscall branches. The wrapper rejects
+# every locking script outside the fixed CSV and SHA256 profiles before calling
+# that engine. These fixtures must execute with zero syscalls. Signature proving
+# is unsupported; this compiler option does not authenticate syscall results.
+allow-syscalls = true
 
 [cairo]
 enable-gas = false
