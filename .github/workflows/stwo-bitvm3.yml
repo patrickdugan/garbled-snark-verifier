@@ -27,6 +27,10 @@ on:
         description: 'Try one smaller standalone Cairo execution under RSS guard'
         type: boolean
         default: false
+      s3_small_profile:
+        description: 'Try one native Cairo STARK with the pinned small preprocessing profile'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -53,6 +57,7 @@ jobs:
           timeout 120s cargo +1.90.0 test --locked --manifest-path nova-bitvm3/stark-bitvm3/core/Cargo.toml -- --nocapture --test-threads=2 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/components.txt
           timeout 120s cargo +1.90.0 test --locked --manifest-path nova-bitvm3/stark-bitvm3/lowering/Cargo.toml --features test-utils -- --nocapture --test-threads=2 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/lowering.txt
           timeout 20s python3 -m unittest discover -s nova-bitvm3/stark-bitvm3/s3-shinigami/tools -p 'test_*.py' -v 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/rss-guard-tests.txt
+          python3 nova-bitvm3/stark-bitvm3/s3-shinigami/tools/check_low_memory_profile.py | tee nova-bitvm3/stark-bitvm3/ci/small-profile-preflight.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -352,4 +357,63 @@ jobs:
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/standalone-*.json
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/standalone-*.gz
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/source-pins.json
+          if-no-files-found: warn
+
+  s3-small-profile:
+    # Reduced preprocessed table (10.2m vs 543m cells) and smaller FFT lifting.
+    # Only one explicit proof is allowed; routine CI stays proof-free.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.s3_small_profile) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-small-profile]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RAYON_NUM_THREADS: '2'
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      RUSTFLAGS: '-C debuginfo=0'
+      RUST_MIN_STACK: '16777216'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: starkware-libs/stwo-cairo
+          ref: 467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/stwo-cairo
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-06-23
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nova-bitvm3/stark-bitvm3/s3-shinigami/vendor/stwo-cairo/stwo_cairo_prover
+          cache-on-failure: true
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 42721464987
+          name: shinigami-s3-standalone-6dedfcdf8277dd75add96998277fac11a417fc92
+          path: nova-bitvm3/stark-bitvm3/s3-shinigami/out/frozen/
+      - name: Pin low-memory profile and compile matched native Rust prover
+        working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/check_low_memory_profile.py --upstream vendor/stwo-cairo | tee out/small-profile-preflight.json
+          timeout --kill-after=5s 360s cargo +nightly-2025-06-23 build --locked \
+            --profile witness-opt-1 \
+            --manifest-path vendor/stwo-cairo/stwo_cairo_prover/Cargo.toml \
+            -p stwo-cairo-dev-utils --bin prove 2>&1 | tee out/small-profile-build.txt
+      - name: One native STARK using pinned profile and 4 GiB sampled RSS
+        working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/prove_low_memory.py --prove-small-once --rss-mib 4096 --timeout-seconds 120
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shinigami-s3-small-${{ github.sha }}
+          path: |
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/small-profile-*.txt
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/small-profile-*.json
           if-no-files-found: warn
