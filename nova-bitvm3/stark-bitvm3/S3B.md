@@ -61,3 +61,12 @@ garbler for a Shinigami proof. Bitcoin dispute transactions and authenticated
 input labels remain separate research tasks.
 
 S3a hashes and the failed proof attempt remain untouched in `S3_RESULTS.json`.
+
+## Single bounded trial activation
+
+The input-restoration path matched the saved archive's 121,452,932 bytes,
+executable hash and SHA patch in an independent local extraction. Eight
+Python watchdog and restore tests passed on the repository runner in
+[run 42720468137](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42720468137).
+The next explicit marker invokes the one-shot RSS experiment using the
+same immutable source artifact; its result is to be recorded separately.
