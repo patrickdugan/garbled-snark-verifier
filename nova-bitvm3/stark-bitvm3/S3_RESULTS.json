@@ -1,0 +1,108 @@
+{
+  "stage": "S3a: pinned Shinigami execution and explicit receipts; native proving blocked by resource limit",
+  "execution_pass_commit": "6618c3ac44f3081bf450f9fb7ba249137cf7cb33",
+  "execution_pass_run": 42641621378,
+  "proof_probe_commit": "c8894f4ee6023ca1d0544b6c8c62571c426f1072",
+  "proof_probe_run": 42642735526,
+  "proof_probe_run_conclusion": "failure",
+  "proof_probe_failure_step": "Explicit bounded native Cairo proof probe",
+  "sources": {
+    "shinigami": "7e8c05d60b4bd7ae91ddc18a42e8e13090286f0c",
+    "ripemd160_cairo": "cdc5ab58b0acc64db87e0b03851fb18213977dc8",
+    "sha1_cairo": "280b4c64ae457fdc4bd7cd807efd17e8dced654e",
+    "scarb": "2.18.0",
+    "scarb_bundled_prover_declared_revision": "467d5c6d",
+    "s2_proving_source": "e9a38e12d09979f7a8625e233a80fecac6c38f02",
+    "producer_versions_differ": true
+  },
+  "compatibility": {
+    "sha256_shim_sha256": "4b4d4d4c222948201702f70246b2b639ec7332c468aeac6573c36f2f73df7b8b",
+    "patch_sha256": "e72675bc278e2bf3a20ea272a473ec54e000864aed40a2a6ace5983491a40119",
+    "changed_upstream_paths": ["Scarb.toml", "packages/utils/src/hash.cairo", "packages/engine/src/hash_cache.cairo", "packages/engine/src/hash_tag.cairo"],
+    "description": "Pin two dependencies to local checkouts and route three SHA-256 imports to a pure Cairo implementation. Bitcoin opcode and transaction logic are unchanged. The compiled program includes this local compatibility patch.",
+    "allow_syscalls_compiler_option": true,
+    "runtime_syscalls_observed": 0,
+    "signature_scripts_supported": false
+  },
+  "tests": {
+    "cairo_passed": 21,
+    "cairo_failed": 0,
+    "script_cases": [
+      {"name": "csv_valid", "expected_accept": true},
+      {"name": "csv_below_delay", "expected_accept": false},
+      {"name": "csv_old_tx_version", "expected_accept": false},
+      {"name": "csv_disabled_sequence", "expected_accept": false},
+      {"name": "csv_wrong_time_unit", "expected_accept": false},
+      {"name": "hashlock_valid", "expected_accept": true},
+      {"name": "hashlock_wrong_preimage", "expected_accept": false},
+      {"name": "hashlock_wrong_commitment", "expected_accept": false}
+    ],
+    "sha256_and_double_sha256_vector_tests": 12,
+    "signature_profile_rejection_tests": 1,
+    "log_receipt_audit_mutations_rejected": 25,
+    "routine_rust_regressions_passed_in_probe_run": 19,
+    "note": "Receipt audit mutations test local serialization and policy equality, not cryptographic proof verification. Cairo tests execute the imported engine with the documented SHA shim."
+  },
+  "standalone_execution": {
+    "case": "csv_valid",
+    "steps": 157303,
+    "output_words": 21,
+    "request_and_txid_match_independent_expected_values": true,
+    "wall_seconds_first_pass": 1.02,
+    "peak_rss_kib_first_pass": 102364,
+    "wall_seconds_probe_run": 2.38,
+    "peak_rss_kib_probe_run": 102172,
+    "syscalls_reported": 0
+  },
+  "program": {
+    "executable_json_bytes": 3561372,
+    "executable_json_sha256": "a9bdc409d2f7ee443ac62cabdc8df27fb44c85a435ca9350788bee890f61bef3",
+    "bytecode_words": 169856,
+    "bytecode_le32_canonical_sha256": "ef98c72eff798d04a235c395be190c38b536a584a9dd5f66692e2174ac5b8b7f",
+    "bytecode_hash_encoding": "Each signed bytecode literal reduced modulo the Cairo prime, then encoded as 32 little-endian bytes; concatenate in order.",
+    "note": "These are provenance hashes. They do not substitute for a proof-bound Cairo program identity."
+  },
+  "bootloader_execution": {
+    "returncode": 0,
+    "elapsed_seconds": 5.588369093,
+    "steps": 2769899,
+    "output_words": 24,
+    "observed_prefix": [1, 23, "95136418571618486416724384618155090416044437718704616005941250299927479032"],
+    "remaining_words_equal_standalone_receipt": true,
+    "syscalls_reported": 0,
+    "prover_input_bytes": 121452932,
+    "prover_input_sha256": "02c8508f635c7934b1a3ac13eedf5545ea4681f1a72edc51685c7b0fd5ccc031",
+    "note": "The observed prefix is recorded as execution evidence, not independently authenticated program binding."
+  },
+  "native_proof_probe": {
+    "attempts_with_proving_invoked": 1,
+    "command": ["scarb", "prove", "--execution-id", "2"],
+    "timeout_seconds": 120,
+    "virtual_address_space_limit_bytes": 6442450944,
+    "max_file_bytes": 134217728,
+    "rayon_threads": 2,
+    "elapsed_seconds_before_abort": 2.147534409,
+    "returncode": -6,
+    "reported_error": "memory allocation of 469762048 bytes failed",
+    "proof_file_produced": false,
+    "native_verification_started": false,
+    "peak_rss_measured": false,
+    "note": "Allocation failed with a 6 GiB address-space limit. This does not establish the prover's exact physical-RAM requirement. The runtime deadline was not reached and the cap was not increased."
+  },
+  "scope": {
+    "real_shinigami_engine_executed": true,
+    "explicit_transaction_receipt_executed": true,
+    "native_cairo_proof_verified": false,
+    "s2_cairo_profile_compatibility_verified": false,
+    "cairo_boolean_or_garbled_verifier_executed": false,
+    "production_security_profile_verified": false,
+    "ark_exit_or_utxoref_state_machine_verified": false,
+    "bitcoin_dispute_protocol_tested": false,
+    "nova_proving_launched": false,
+    "sp1_or_cuda_proving_launched": false
+  },
+  "artifacts": {
+    "execution": {"id": 13686030945, "run": 42641621378, "zip_bytes": 192578, "zip_sha256": "d9290a2afef1eb913afca9bf6267ede3965dd02b4f1cce139d8bae6c709086dd"},
+    "native_probe": {"id": 13685129678, "run": 42642735526, "zip_bytes": 7918360, "zip_sha256": "9a2df15e9e6892496c6c98549b4129bacad01ccc37e1a06d1243587203c600b9", "includes": ["prover_input.json.gz", "native-proof-report.json", "native-proving.txt", "bootloader-execution.txt", "receipt-audit.json", "standalone-compat.patch", "shinigami_bitvm3_receipt.executable.json"], "expires_at": "2027-02-07T15:15:00Z"}
+  }
+}

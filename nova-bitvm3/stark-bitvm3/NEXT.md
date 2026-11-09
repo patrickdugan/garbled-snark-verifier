@@ -1,23 +1,29 @@
-# Continuation after S2
+# Continuation after S2 and S3a
 
-S2 at `f90a7095` checked an authentic upstream example STARK against one fixed complete verifier in native, Boolean and garbled execution. Preserve the source pin, fixture hashes, explicit public bindings and bounded execution policy described in S2.md.
+S2 at `f90a7095` passed an authentic small Stwo proof through one fixed complete verifier in native, Boolean and garbled execution. Its 16-bit FRI test profile remains unsuitable for production. S3a at `6618c3ac` executes a pinned Shinigami adapter with explicit receipts; the native proof probe at `c8894f4` stopped at an allocation failure under the 6 GiB address-space limit. Preserve these distinct evidence boundaries.
 
-## Shinigami and production-profile work
+## Resume from the saved Shinigami execution
 
-Locate a small authentic Shinigami proof with its exact producer version and Cairo program identity. Determine the complete proof/hash/channel profile before choosing an adapter. The currently tested profile is standard Blake2s at proving commit `e9a38e12`; proof bytes from a different profile must fail closed. Begin with standalone native verification and a frozen fixture, then construct the corresponding proof-independent verifier template.
+The source artifact from run 42642735526 contains `prover_input.json.gz`, the compiled executable, source patch, receipt audit and native failure report. Its uncompressed prover input hashes to `02c8508f635c7934b1a3ac13eedf5545ea4681f1a72edc51685c7b0fd5ccc031`. Work from that trace instead of repeating execution or proving without a changed hypothesis.
 
-Bind the authenticated public output to the intended application statement. It should identify the Bitcoin network and transaction/input and all required prevout data, with the applicable script semantics and verifier policy. Ark adds transaction-graph and timeout requirements. UTXORef adds authorization, state-transition and replay-prevention checks. Chain anchoring, reorg policy and current spendability need their appropriate independent checks.
+First isolate the memory cost: distinguish fixed preprocessing from trace allocation and virtual-memory reservations. The failed allocation requested 469,762,048 bytes with a 6 GiB address-space cap; exact peak physical RAM was not measured. Keep the present CI cap. The compiled program has 169,856 words, while bootloader execution expanded the measured workload from 157,303 to 2,769,899 steps. Investigate a standalone fixed-program route and compile-time specialization of the two explicitly allowed script profiles. Any change to Shinigami semantics or its hash backend requires new differential tests and a new program pin.
 
-Replace the 16-bit test FRI profile with a security-reviewed production configuration. Record its complete graph and input-commitment costs before starting a large garbled run. The S2 ciphertext count cannot be scaled into a production estimate without building that profile. Keep GPU/Nova proving outside this experiment.
+Scarb 2.18 declares producer revision `467d5c6d`; S2 pins proving revision `e9a38e12`. Choose a matched producer/verifier pair before importing proof bytes. Define the public-memory contract explicitly: current standalone output has 21 receipt cells, bootloader output has 24, and the selected Cairo circuit expects a two-cell output digest. Bind the exact expected program and receipt in the verifier. A log check, an observed program hash or a successful generic native proof check alone does not discharge that obligation.
 
-Audit the actual complete relation for denominator nonzero obligations, transcript binding, proof-shape policy and finalized witness domains. The S1 gate tests and S2 mutations provide differential evidence; formal compiler correctness and a cryptographic security review remain outstanding.
+Obtain and freeze a native-verifiable Cairo proof under a deliberate budget. Then build its proof-independent complete verifier template, audit its graph and public bindings, and measure its Boolean gate/input count before starting garbling. Default CI must remain proof-free; `[s3-prove]` is an explicit opt-in and the saved failed attempt must remain recorded.
 
-## Budget, fixtures and settlement
+## Full applications and production profile
 
-The current frozen evidence lives in a hash-pinned Actions artifact, also supplied as a ZIP in the ChatGPT result. Preserve a durable in-repository copy before the source artifact's February 7, 2027 expiry. The existing optional workflow fails closed when that source artifact is unavailable. Preserve byte-exact bundle/witness hashes, since a regenerated proof's JSON map ordering can differ.
+S3a admits only a fixed CSV locking script and a SHA256 hashlock, with push-only ScriptSig and no witness inputs. It does not support signature verification or establish an Ark exit/forfeit path. Ark adds ownership, transaction-graph and timeout rules. UTXORef requires an explicit authorization/state-transition relation and consumer replay state. Chain anchoring, reorg policy and current spendability need independent checks. The request echo does not supply those semantics.
 
-Investigate constant elimination and reducing internal witness inputs while preserving the same accepted relation. S2 exposes 12,206,976 input bits for its small example, so authenticated-input overhead deserves a separate benchmark. Use trusted template structure for specialization and keep all private values out of graph construction decisions.
+Replace S2's weak FRI profile with a security-reviewed production configuration. Build and measure that complete graph; do not scale the S2 gate count into a production estimate. Audit denominator nonzero obligations, transcript binding, proof shape and finalized witness domains. Compiler correctness remains tested differentially and formally unproved.
 
-A Bitcoin-enforceable deployment also needs authenticated garbled inputs, setup assumptions, the transaction/challenge graph and adversarial dispute execution. The current fixed-seed, direct-label laboratory does not implement that protocol. Off-chain ciphertext bytes are distinct from on-chain transaction bytes.
+## Fixtures, input cost and Bitcoin settlement
 
-Default CI remains on small components. Run full-verifier work only by explicit opt-in, with fixed wall-time and memory caps. Preserve coverage of unrelated workflows when narrowing their paths for a future PR; broad nova-bitvm3 pull-request globs still need review before opening one.
+S2/S3 evidence archives currently depend on finite Actions retention ending February 7, 2027; preserve byte-exact durable copies. Regenerated JSON may change order and hashes. The supplied ChatGPT evidence ZIPs provide independent copies, and the optional S2 workflow fails closed when its pinned source artifact expires.
+
+Investigate constant elimination and reducing internal witness inputs while preserving the accepted relation. S2 exposes 12,206,976 input bits, so authenticated-input costs need measurement. Specialize only on trusted public template structure.
+
+A Bitcoin-enforceable integration still needs authenticated garbled inputs, setup assumptions, transaction/challenge construction and adversarial dispute execution. The fixed-seed/direct-label laboratory exercises correctness only. Off-chain ciphertext bytes do not measure on-chain transaction bytes.
+
+Keep Nova, SP1 and CUDA proving outside this workstream. Narrow broad pull-request CI paths before opening a PR while retaining coverage of the sources those workflows exercise.

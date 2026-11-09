@@ -1,34 +1,42 @@
 # Direct Stwo-to-Boolean prototype
 
-A pinned upstream Stwo verifier can now check an authentic small STARK through the repository's Boolean and garbled engines. The S2 checkpoint uses a fixed squared-Fibonacci AIR with 32/16-row traces and deliberately weak test parameters. Shinigami/Cairo execution proofs and Ark/UTXORef application statements remain the next integration targets.
+The S2 checkpoint checks an authentic small Stwo STARK through a fixed complete verifier in native, Boolean and garbled execution. It uses a squared-Fibonacci AIR with 32/16-row traces and deliberately weak test parameters.
 
-## Current checkpoint: S2 passed
+S3a adds a pinned Shinigami execution adapter and explicit transaction receipts. Its Cairo tests and standalone execution pass. The first native Cairo proving attempt stopped on an allocation failure under the fixed 6 GiB address-space cap. Cairo proof verification and its connection to the garbled verifier remain open.
+
+## Latest application checkpoint: S3a
+
+Execution code `6618c3ac44f3081bf450f9fb7ba249137cf7cb33` passed all enabled jobs in [run 42641621378](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42641621378). The real Shinigami engine, with a documented pure-Cairo SHA compatibility patch, passed **21 Cairo tests** covering CSV/hashlock scripts, independent hash vectors and profile rejection.
+
+The standalone CSV execution used **157,303 Cairo steps**, produced an exact **21-word receipt**, and reported zero executed syscalls. A local receipt audit checks the echoed transaction and independent transaction-hash calculation and rejects 25 output mutations. This audit concerns captured execution data; it does not verify a STARK.
+
+The optional native probe at `c8894f4` ran the bootloader successfully, producing 121,452,932 bytes of prover input. Proving then aborted on a 469,762,048-byte allocation under the 6 GiB address-space cap. No proof was produced. That failed run and its saved trace are recorded in [S3.md](S3.md) and [S3_RESULTS.json](S3_RESULTS.json). Default CI does not launch or retry the probe.
+
+## Complete-verifier checkpoint: S2 passed
 
 Tested code: `f90a7095f0cb4541b3eae73877e278cd70f79f2b`. All four jobs passed in [workflow run 42633574320](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42633574320).
 
-The complete fixed verification relation has **141,577,483 non-free gates**. It accepted the authentic proof in native, Boolean and garbled execution. Seven negative cases failed the native/Boolean checks; the full garbled test also rejected a changed authentication path with newly synthesized internal values.
+The complete fixed verification relation has **141,577,483 non-free gates**. It accepted the authentic example proof in native, Boolean and garbled execution. Seven negative cases failed native/Boolean checks; the full garbled test also rejected an altered authentication path with newly synthesized internal values.
 
-Garbling took **24.7 seconds**, followed by **19.3 seconds per evaluation**. The ciphertext file was **2.11 GiB**, and peak RSS for the full garble/evaluate command was **3.33 GiB**. These hosted-CPU measurements exclude compilation and cover this test-only example. The FRI parameters account for **16 security bits**, so production verification needs its own profile and measurements.
+Garbling took **24.7 seconds**, followed by **19.3 seconds per evaluation**. The off-chain ciphertext file was **2.11 GiB**, and peak RSS for the full command was **3.33 GiB**. These hosted-CPU measurements exclude compilation and apply to the test-only example. Its FRI parameters account for **16 security bits**, so production verification needs a separately reviewed profile and measurements.
 
-See [S2.md](S2.md) for reproduction and boundaries, and [S2_RESULTS.json](S2_RESULTS.json) for exact evidence. The frozen artifact has finite retention; keep an independent copy of its evidence ZIP.
+See [S2.md](S2.md) and [S2_RESULTS.json](S2_RESULTS.json). The S2/S3 Actions artifacts have finite retention; keep independent copies of their byte-exact evidence archives.
 
-## Earlier checkpoints retained
+## Earlier checkpoints
 
-S1 at `315837b4e32bead8e012f53e0b4a73ebdc0fd195` imports all ten native gate families, including exact permutations, packed-word hash gates and finalized witness-domain constraints. A compact all-gate fixture garbled to 43,055 ciphertexts and rejected five adversarial witnesses. An actual upstream-finalized synthetic circuit matched the native checker across 108 canonical mutations. Details remain in [S1.md](S1.md) and [S1_RESULTS.json](S1_RESULTS.json).
+S1 at `315837b4` imports all ten native gate families, including exact permutations, packed-word hash gates and finalized witness-domain constraints. Its compact all-gate fixture garbled to 43,055 ciphertexts and rejected five adversarial witnesses. An actual upstream-finalized synthetic circuit matched the native checker across 108 canonical mutations. Details remain in [S1.md](S1.md) and [S1_RESULTS.json](S1_RESULTS.json).
 
-S0 at `41a4b00820211823058f7f2a77f57cef3105985e` provides field, hash and transcript primitives. Its two-column, depth-three Merkle opening uses 57,929 ciphertexts. Historical measurements remain in [RESULTS.json](RESULTS.json).
-
-The S2 run retains all 19 Rust regression tests from S0/S1 and adds one backend-topology unit test. The full-proof checks are executable assertions recorded separately from those test counts.
+S0 at `41a4b008` supplies field/hash/transcript primitives. Its two-column, depth-three Merkle opening uses 57,929 ciphertexts. Historical evidence remains in [RESULTS.json](RESULTS.json).
 
 ## Upstream and interfaces
 
-Upstream is pinned to `starkware-libs/proving` commit `e9a38e12d09979f7a8625e233a80fecac6c38f02`. Its selected profile uses standard Blake2s with M31 and the CM31/QM31 extension tower. Blake2s-M31 and Poseidon profiles require independent end-to-end compatibility evidence.
+The Stwo verifier pin is `starkware-libs/proving` at `e9a38e12d09979f7a8625e233a80fecac6c38f02`, using standard Blake2s with M31 and the CM31/QM31 tower. Other hash profiles require independent compatibility evidence. Scarb 2.18 declares a different Stwo-Cairo producer revision, so its proof bytes cannot be assumed compatible with S2.
 
-`core/` and `lowering/` have no third-party runtime dependencies. `adapter/` uses the existing garbler with parent default features disabled. `upstream/` imports actual finalized native constraints and binds constants and expected outputs. `s2-lab/` instantiates the full verifier for a fixed example, produces an authentic fixture through an explicit generator, and tests saved proof witnesses through disk-backed garbling.
+`core/` and `lowering/` have no third-party runtime dependencies. `adapter/` uses the repository garbler with parent default features disabled. `upstream/` imports finalized native constraints and binds constants and expected outputs. `s2-lab/` checks a frozen complete example proof through disk-backed garbling. `s3-shinigami/` executes its restricted script profiles and exposes a separately opted-in native proof probe.
 
-The graph and expected statement are trusted configuration. Acceptance conjoins canonical input encodings, all imported constraints and every expected binding. Internal verifier values are supplied as witnesses and checked, which contributes to the 12,206,976-bit input layout in the S2 example.
+The graph and expected statement are trusted configuration. Acceptance combines canonical encodings, all imported constraints and every expected binding. Internal verifier values are supplied as witnesses and checked, contributing to the 12,206,976-bit S2 input layout.
 
-## Run routine tests
+## Routine tests
 
 ```sh
 python3 nova-bitvm3/stark-bitvm3/reference_vectors.py
@@ -38,10 +46,10 @@ cargo +1.90.0 test --manifest-path nova-bitvm3/stark-bitvm3/adapter/Cargo.toml -
 cargo +1.94.0 test --manifest-path nova-bitvm3/stark-bitvm3/upstream/Cargo.toml --test conformance -- --nocapture --test-threads=1
 ```
 
-Generate the Python vectors before compiling core tests. Routine CI excludes prover features and keeps fixed CPU job caps. The opt-in S2 job checks a frozen authentic fixture, with explicit memory and time limits. Nova and SP1 proving remain outside this workstream.
+Generate Python vectors before compiling core tests. Routine CI keeps bounded CPU jobs. Shinigami execution and native proving use separate explicit workflow inputs/commit markers. Nova, SP1 and CUDA proving remain outside this workstream.
 
 ## Required before application use
 
-Match an authentic Shinigami proof to its producer commit, hash profile, Cairo program and public outputs. Bind the application statement to the expected Bitcoin transaction context and policy. Ark exit/forfeit conditions and UTXORef authorization/state transitions need their own checks. Production proof parameters and Bitcoin dispute transactions must be validated before routing funds through this path.
+A successful Cairo proof must be matched to its exact producer, program identity, hash profile and expected public output. The current S3 profiles test CSV and SHA256 components; they do not implement an Ark exit or a UTXORef state machine. Those applications need ownership/authorization, transaction-state relations, chain policy and replay controls. Production-security parameters and Bitcoin dispute transactions remain separate acceptance requirements.
 
-Fixed seeds, direct label access and test-security proofs are laboratory conventions. The next work is specified in [NEXT.md](NEXT.md).
+Fixed seeds, direct label access and weak test proofs are laboratory conventions. [NEXT.md](NEXT.md) specifies the saved-input memory investigation and remaining verifier/application work.

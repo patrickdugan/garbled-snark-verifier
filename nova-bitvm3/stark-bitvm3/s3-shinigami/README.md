@@ -1,9 +1,34 @@
-# S3 Shinigami receipt laboratory
+# Shinigami receipt laboratory
 
-This package calls the real Shinigami engine at commit 7e8c05d60b4bd7ae91ddc18a42e8e13090286f0c. It restricts execution to one noncoinbase legacy-script input, with explicit prevout data and fixed CSV/CLTV/minimal-push/push-only flags. The serialized output includes the complete request and the engine's verdict. It does not validate chain inclusion, spendability, consensus activation, an Ark transaction graph, or a UTXORef state machine. Application tags are domain separators only.
+This package executes the pinned Shinigami engine for two explicitly bounded legacy-script profiles. It produces a receipt containing the complete transaction request, fixed semantics and the execution verdict. See [S3.md](../S3.md) and [S3_RESULTS.json](../S3_RESULTS.json) for measurements and exact evidence.
 
-Scarb 2.18.0 matches the toolchain version recorded by the pinned proving monorepo. The two external Cairo dependencies are pinned to the revisions in Shinigami's own lockfile and connected by local manifest paths. No Shinigami engine source is patched.
+**Execution checkpoint passed:** 21 Cairo tests, a standalone CSV execution with 157,303 steps, and a 21-word receipt checked against independent transaction bytes and transaction-hash calculation. The local receipt audit rejects 25 output mutations. An additional bootloader execution completed and its compressed prover input is saved.
 
-The initial fixtures exercise a CSV delay and a SHA256 preimage lock. Valid cases and boundary mutations execute the imported Cairo engine. Compilation and execution evidence must be inspected before treating this checkpoint as passed. A proof consumer must cryptographically authenticate the exact compiled program and expected serialized output. A matching receipt digest or an echoed application tag alone is insufficient.
+**Native proving remains blocked:** the one opt-in proof attempt aborted on an allocation failure under the 6 GiB address-space cap. No Cairo proof was generated or verified. S2's full Boolean/garbled proof result remains a separate small example.
 
-The optional CI job has a ten-minute cap, a 6 GiB execution address-space limit and bounded build/test commands. Full Nova proving remains excluded. Cairo proof generation and complete Boolean/garbled verification are separate opt-in milestones.
+## Sources and compatibility
+
+Shinigami is pinned to `7e8c05d60b4bd7ae91ddc18a42e8e13090286f0c`. RIPEMD160 and SHA1 dependencies use the exact revisions in its lockfile. Scarb is 2.18.0. `tools/prepare.py` localizes those dependencies and replaces three SHA-256 imports with `compat/sha256.cairo`, recording the exact patch and hashes. The engine's Bitcoin opcode and transaction logic remain unchanged.
+
+The pure Cairo SHA implementation is tested against twelve independent SHA-256 and double-SHA-256 vectors. The compiler admits upstream's unused signature syscall branches through `allow-syscalls=true`; supported locking scripts and push-only ScriptSig checks keep those paths outside this pilot. Both measured CSV executions reported zero syscalls.
+
+## Scope
+
+Only regtest-tagged, single-input, noncoinbase legacy transactions are accepted by the wrapper. Supported locking scripts are a fixed ten-unit CSV script and a SHA256 hashlock. Application IDs label intended consumers. Ark ownership/exit graphs, UTXORef state transitions, signatures, chain anchoring and replay prevention remain separate requirements.
+
+The complete request is public in the receipt, including ScriptSig. The log auditor does not authenticate a STARK, and the native proof probe never emits a production acceptance token. A future verifier must bind the expected compiled program and public output to the application's own statement. Scarb's bundled producer differs from the S2 verifier pin; the public-output format also needs an explicit adapter.
+
+## Run
+
+With pinned checkouts under `vendor/`, use:
+
+```sh
+python3 tools/prepare.py
+python3 tools/cases.py out
+scarb build
+scarb test
+scarb execute --no-build --arguments-file out/csv_valid.args.json --print-program-output --print-resource-usage > out/execution.txt
+python3 tools/audit_execution.py out/execution.txt
+```
+
+`tools/prove_once.py --prove` is a separate, explicitly opted-in experiment. It enforces its memory/file limits and command deadlines, writes each stage's return code and preserves failure evidence. The known allocation failure is recorded in S3_RESULTS.json; default CI does not retry it. No Nova proving is part of this package.
