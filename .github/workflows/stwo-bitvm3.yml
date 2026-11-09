@@ -112,7 +112,9 @@ jobs:
       RUSTFLAGS: '-C debuginfo=0'
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly-2026-03-06
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-06
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: nova-bitvm3/stark-bitvm3/s2-lab
