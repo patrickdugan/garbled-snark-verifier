@@ -17,6 +17,7 @@ garbled-snark-verifier = { path = "../../..", default-features = false }
 crossbeam = "0.8"
 rand = "0.8"
 rand_chacha = "0.3"
+stwo-bitvm3-lowering = { path = "../lowering", features = ["test-utils"] }
 
 [profile.test]
 opt-level = 2

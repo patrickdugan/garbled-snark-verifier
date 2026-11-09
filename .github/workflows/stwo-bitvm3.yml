@@ -73,20 +73,22 @@ jobs:
       RUSTFLAGS: '-C debuginfo=0'
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.90.0
+      # LazyLock::get in pinned upstream common requires this stable toolchain.
+      - uses: dtolnay/rust-toolchain@1.94.0
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: nova-bitvm3/stark-bitvm3/upstream
+          cache-on-failure: true
       - name: Compile pinned native circuit checker and compare its gate semantics
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p nova-bitvm3/stark-bitvm3/ci
-          timeout 120s cargo +1.90.0 tree --manifest-path nova-bitvm3/stark-bitvm3/upstream/Cargo.toml -e features > nova-bitvm3/stark-bitvm3/ci/upstream-dependencies.txt
+          timeout 120s cargo +1.94.0 tree --manifest-path nova-bitvm3/stark-bitvm3/upstream/Cargo.toml -e features > nova-bitvm3/stark-bitvm3/ci/upstream-dependencies.txt
           if grep -E 'sp1-(prover|sdk|build)|stwo feature "prover"|stwo-cairo-prover|circuits-stark-verifier-examples' nova-bitvm3/stark-bitvm3/ci/upstream-dependencies.txt; then
             echo 'Prover code is outside this bounded job'; exit 1
           fi
-          timeout 420s cargo +1.90.0 test --manifest-path nova-bitvm3/stark-bitvm3/upstream/Cargo.toml --test conformance -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/upstream.txt
+          timeout 420s cargo +1.94.0 test --manifest-path nova-bitvm3/stark-bitvm3/upstream/Cargo.toml --test conformance -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/upstream.txt
           cp nova-bitvm3/stark-bitvm3/upstream/Cargo.lock nova-bitvm3/stark-bitvm3/ci/upstream-Cargo.lock
       - uses: actions/upload-artifact@v4
         if: always()
