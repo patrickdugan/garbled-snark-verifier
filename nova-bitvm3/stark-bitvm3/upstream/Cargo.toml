@@ -1,0 +1,21 @@
+[package]
+name = "stwo-bitvm3-upstream"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-only"
+description = "Pinned upstream finalized-circuit import; verifier-only dependencies"
+
+[workspace]
+
+[dependencies]
+stwo-bitvm3-lowering = { path = "../lowering" }
+circuits = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+
+[dev-dependencies]
+stwo = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02", default-features = false, features = ["std"] }
+stwo-bitvm3-core = { path = "../core" }
+stwo-bitvm3-lowering = { path = "../lowering", features = ["test-utils"] }
+
+[profile.test]
+opt-level = 2

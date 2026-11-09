@@ -21,14 +21,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.90.0
-      - name: Deterministic native references and bounded Boolean tests
+      - name: Deterministic references and bounded Boolean checks
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p nova-bitvm3/stark-bitvm3/ci
           python3 nova-bitvm3/stark-bitvm3/reference_vectors.py
           python3 nova-bitvm3/stark-bitvm3/reference_vectors.py --check
-          timeout 120s cargo test --locked --manifest-path nova-bitvm3/stark-bitvm3/core/Cargo.toml -- --nocapture --test-threads=2 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/components.txt
+          timeout 120s cargo +1.90.0 test --locked --manifest-path nova-bitvm3/stark-bitvm3/core/Cargo.toml -- --nocapture --test-threads=2 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/components.txt
+          timeout 120s cargo +1.90.0 test --locked --manifest-path nova-bitvm3/stark-bitvm3/lowering/Cargo.toml --features test-utils -- --nocapture --test-threads=2 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/lowering.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -44,23 +45,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.90.0
-      - name: Cache CPU adapter dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: nova-bitvm3/stark-bitvm3/adapter
-      - name: Verify dependency boundary and garble only the bounded opening gadget
+      - name: Verify dependency boundary and garble bounded components
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p nova-bitvm3/stark-bitvm3/ci
-          cargo tree --manifest-path nova-bitvm3/stark-bitvm3/adapter/Cargo.toml -e normal > nova-bitvm3/stark-bitvm3/ci/dependencies.txt
-          if grep -E 'sp1-(prover|sdk|build)|cuda' nova-bitvm3/stark-bitvm3/ci/dependencies.txt; then
-            echo 'Unexpected prover dependency in component CI'; exit 1
+          cargo +1.90.0 tree --manifest-path nova-bitvm3/stark-bitvm3/adapter/Cargo.toml -e normal,build > nova-bitvm3/stark-bitvm3/ci/dependencies.txt
+          if grep -Ei 'sp1-(prover|sdk|build)|cuda' nova-bitvm3/stark-bitvm3/ci/dependencies.txt; then
+            echo 'Unexpected prover dependency'; exit 1
           fi
-          timeout 420s cargo test --manifest-path nova-bitvm3/stark-bitvm3/adapter/Cargo.toml --test garbled -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/garbled.txt
+          timeout 420s cargo +1.90.0 test --manifest-path nova-bitvm3/stark-bitvm3/adapter/Cargo.toml --tests -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/garbled.txt
           cp nova-bitvm3/stark-bitvm3/adapter/Cargo.lock nova-bitvm3/stark-bitvm3/ci/adapter-Cargo.lock
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: stwo-garbling-${{ github.sha }}
+          path: nova-bitvm3/stark-bitvm3/ci/
+  upstream-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nova-bitvm3/stark-bitvm3/upstream
+      - name: Compile pinned native circuit checker and compare its gate semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p nova-bitvm3/stark-bitvm3/ci
+          timeout 120s cargo +1.90.0 tree --manifest-path nova-bitvm3/stark-bitvm3/upstream/Cargo.toml -e features > nova-bitvm3/stark-bitvm3/ci/upstream-dependencies.txt
+          if grep -E 'sp1-(prover|sdk|build)|stwo feature "prover"|stwo-cairo-prover|circuits-stark-verifier-examples' nova-bitvm3/stark-bitvm3/ci/upstream-dependencies.txt; then
+            echo 'Prover code is outside this bounded job'; exit 1
+          fi
+          timeout 420s cargo +1.90.0 test --manifest-path nova-bitvm3/stark-bitvm3/upstream/Cargo.toml --test conformance -- --nocapture --test-threads=1 2>&1 | tee nova-bitvm3/stark-bitvm3/ci/upstream.txt
+          cp nova-bitvm3/stark-bitvm3/upstream/Cargo.lock nova-bitvm3/stark-bitvm3/ci/upstream-Cargo.lock
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stwo-upstream-${{ github.sha }}
           path: nova-bitvm3/stark-bitvm3/ci/

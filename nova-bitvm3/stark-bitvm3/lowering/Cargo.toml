@@ -1,0 +1,22 @@
+[package]
+name = "stwo-bitvm3-lowering"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "GPL-3.0-only"
+description = "Checked Boolean lowering for a trusted finalized Stwo circuit"
+
+[workspace]
+
+[features]
+test-utils = []
+
+[dependencies]
+stwo-bitvm3-core = { path = "../core" }
+
+[[test]]
+name = "security"
+required-features = ["test-utils"]
+
+[profile.test]
+opt-level = 2
