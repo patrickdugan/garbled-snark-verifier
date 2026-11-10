@@ -9,3 +9,7 @@ For this diagnostic-only experiment, `tools/instrument_relations.py` adds a sour
 A single opt-in `[s3-relations]` run, after fast static checks, retains the frozen `canonical_small` trace, **4 GiB RSS / 120-second** native guard and the **15-minute** job cap. The parser accepts diagnostic completion only when the source-pinned native lookup assertion fails with the pinned residual and the relation summary is well formed; output truncation is disclosed. The experiment cannot establish a Shinigami proof or Bitcoin settlement.
 
 If reconstruction still exceeds budget, the next step is component-local reconstruction and incremental aggregation of relation multiplicities. That would require separate source-level verification against upstream's unmodified relation evaluator.
+
+## One-shot activation
+
+Routine components, upstream conformance and small garbling all passed at [42753560632](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42753560632) after the diagnostic reconstruction patch. The next marker-triggered commit initiates exactly one `canonical_small` relation audit using the same immutable trace and unchanged resource ceilings. Its result will be documented in a separate run record.
