@@ -38,7 +38,8 @@ def log(truncated=False):
         "S3_RELATIONS_BEGIN\n"
         "S3_RELATIONS_TEXT_BEGIN\n"
         + content
-        + "\nS3_RELATIONS_TEXT_END\n"
+        + ("\n" if truncated else "")
+        + "S3_RELATIONS_TEXT_END\n"
         + f"S3_RELATIONS_TRUNCATED {str(truncated).lower()}\n"
         + "S3_RELATIONS_END\n"
         + "thread main panicked: assertion left == right failed\n"
