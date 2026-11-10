@@ -55,6 +55,10 @@ on:
         description: 'One bounded XOR8 source zero-input callsite audit; no proof acceptance'
         type: boolean
         default: false
+      s3_xor8_caller_air:
+        description: 'One bounded bitwise_builtin caller-AIR XOR8 cancellation audit; no proof acceptance'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -387,8 +391,8 @@ jobs:
     # Reduced preprocessed table (10.2m vs 543m cells) and smaller FFT lifting.
     # Only one explicit proof is allowed; routine CI stays proof-free.
     if: >-
-      (github.event_name == 'workflow_dispatch' && (inputs.s3_small_profile || inputs.s3_lookup_diag || inputs.s3_no_pedersen_profile || inputs.s3_relation_audit || inputs.s3_local_relation_audit || inputs.s3_xor8_relation_audit || inputs.s3_xor8_counterparties)) ||
-      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[s3-small-profile]') || contains(github.event.head_commit.message, '[s3-lookup]') || contains(github.event.head_commit.message, '[s3-no-pedersen]') || contains(github.event.head_commit.message, '[s3-relations]') || contains(github.event.head_commit.message, '[s3-local]') || contains(github.event.head_commit.message, '[s3-xor8]') || contains(github.event.head_commit.message, '[s3-counterparties]')))
+      (github.event_name == 'workflow_dispatch' && (inputs.s3_small_profile || inputs.s3_lookup_diag || inputs.s3_no_pedersen_profile || inputs.s3_relation_audit || inputs.s3_local_relation_audit || inputs.s3_xor8_relation_audit || inputs.s3_xor8_counterparties || inputs.s3_xor8_caller_air)) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[s3-small-profile]') || contains(github.event.head_commit.message, '[s3-lookup]') || contains(github.event.head_commit.message, '[s3-no-pedersen]') || contains(github.event.head_commit.message, '[s3-relations]') || contains(github.event.head_commit.message, '[s3-local]') || contains(github.event.head_commit.message, '[s3-xor8]') || contains(github.event.head_commit.message, '[s3-counterparties]') || contains(github.event.head_commit.message, '[s3-caller]')))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -403,6 +407,7 @@ jobs:
       S3_LOCAL_RELATION: ${{ (github.event_name == 'workflow_dispatch' && inputs.s3_local_relation_audit) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-local]')) }}
       S3_XOR8_RELATION: ${{ (github.event_name == 'workflow_dispatch' && inputs.s3_xor8_relation_audit) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-xor8]')) }}
       S3_XOR8_COUNTERPARTIES: ${{ (github.event_name == 'workflow_dispatch' && inputs.s3_xor8_counterparties) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-counterparties]')) }}
+      S3_XOR8_CALLER_AIR: ${{ (github.event_name == 'workflow_dispatch' && inputs.s3_xor8_caller_air) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-caller]')) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -434,6 +439,9 @@ jobs:
           if [[ "$S3_XOR8_COUNTERPARTIES" == "true" && ( "$S3_RELATION_AUDIT" == "true" || "$S3_NO_PEDERSEN" == "true" || "$S3_LOOKUP_DIAG" == "true" || "$S3_LOCAL_RELATION" == "true" || "$S3_XOR8_RELATION" == "true" ) ]]; then
             echo "Select only one source-level diagnostic"; exit 1
           fi
+          if [[ "$S3_XOR8_CALLER_AIR" == "true" && ( "$S3_RELATION_AUDIT" == "true" || "$S3_NO_PEDERSEN" == "true" || "$S3_LOOKUP_DIAG" == "true" || "$S3_LOCAL_RELATION" == "true" || "$S3_XOR8_RELATION" == "true" || "$S3_XOR8_COUNTERPARTIES" == "true" ) ]]; then
+            echo "Select only one source-level diagnostic"; exit 1
+          fi
           if [[ "$S3_NO_PEDERSEN" == "true" ]]; then
             python3 tools/check_no_pedersen_profile.py --input out/frozen/standalone-prover-input.json.gz --upstream vendor/stwo-cairo | tee out/no-pedersen-preflight.json
           else
@@ -459,6 +467,10 @@ jobs:
             python3 tools/instrument_xor8_counterparties.py --upstream vendor/stwo-cairo --output out/small-profile-counterparties.patch | tee out/small-profile-counterparties-instrument.json
             feature_args=(--features stwo-cairo-prover/relation-tracker)
           fi
+          if [[ "$S3_XOR8_CALLER_AIR" == "true" ]]; then
+            python3 tools/instrument_xor8_caller_air.py --upstream vendor/stwo-cairo --output out/small-profile-caller.patch | tee out/small-profile-caller-instrument.json
+            feature_args=(--features stwo-cairo-prover/relation-tracker)
+          fi
           timeout --kill-after=5s 600s cargo +nightly-2025-06-23 build --locked \
             --profile witness-opt-1 \
             --manifest-path vendor/stwo-cairo/stwo_cairo_prover/Cargo.toml \
@@ -470,6 +482,15 @@ jobs:
           set -euo pipefail
           if [[ "$S3_NO_PEDERSEN" == "true" ]]; then
             python3 tools/prove_no_pedersen.py --prove-no-pedersen-once --rss-mib 4096 --timeout-seconds 120
+          elif [[ "$S3_XOR8_CALLER_AIR" == "true" ]]; then
+            set +e
+            python3 tools/prove_low_memory.py --prove-small-once --rss-mib 4096 --timeout-seconds 120
+            status=$?
+            set -e
+            if [[ "$status" -eq 0 ]]; then
+              echo "Unexpected native proof acceptance during caller-AIR audit"; exit 1
+            fi
+            python3 tools/summarize_xor8_caller_air.py --log out/small-profile-proving.txt --report out/small-profile-report.json --output out/small-profile-caller-summary.json
           elif [[ "$S3_XOR8_COUNTERPARTIES" == "true" ]]; then
             set +e
             python3 tools/prove_low_memory.py --prove-small-once --rss-mib 4096 --timeout-seconds 120
@@ -518,6 +539,11 @@ jobs:
           else
             python3 tools/prove_low_memory.py --prove-small-once --rss-mib 4096 --timeout-seconds 120
           fi
+      - name: Publish compact caller-AIR evidence as annotations
+        if: always() && env.S3_XOR8_CALLER_AIR == 'true'
+        working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
+        shell: bash
+        run: python3 tools/annotate_caller_summary.py --summary out/small-profile-caller-summary.json --log out/small-profile-proving.txt --instrument out/small-profile-caller-instrument.json --report out/small-profile-report.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
