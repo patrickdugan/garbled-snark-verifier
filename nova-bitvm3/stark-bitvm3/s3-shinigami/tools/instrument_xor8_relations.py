@@ -20,6 +20,7 @@ from instrument_local_relations import (
     instrument_prover as base_prover, instrument_tracker as base_tracker,
 )
 
+WITNESS_SOURCE = "stwo_cairo_prover/crates/prover/src/witness/cairo_claim_generator.rs"
 COMPONENT = "verify_bitwise_xor_8"
 TRACKER_NAME = "track_local_verify_bitwise_xor_8_relations"
 LOG_SIZE = 16
@@ -92,17 +93,18 @@ def xor_rust() -> str:
         reconstructed[PREPROCESSED_TRACE_IDX][index] = rows;
     }
     eprintln!("S3_LOCAL_PREPROCESS_SOURCE canonical_pinned_original");
-    // Base-trace columns retain the existing committed-polynomial
-    // reconstruction, with exact degree and row-count checks.
-    for &index in &indices[ORIGINAL_TRACE_IDX] {
-        let polynomial = source[ORIGINAL_TRACE_IDX][index];
-        let coeffs = reduce_degree(polynomial.evals.clone().interpolate());
-        assert!(coeffs.log_size() <= log_size,
-                "base source polynomial exceeds selected component degree");
-        let rows = coeffs.evaluate(domain).values.to_cpu();
-        assert_eq!(rows.len(), 1usize << log_size);
-        reconstructed[ORIGINAL_TRACE_IDX][index] = rows;
-    }"""
+    // The producer's original base column evaluations are captured before
+    // the tree builder interpolates and potentially lifts them for commitment.
+    // They are the exact values passed into the native commitment unchanged.
+    let source_rows = XOR8_SOURCE.get()
+        .expect("XOR8 original 65536-row base source was never captured");
+    assert_eq!(source_rows.len(), indices[ORIGINAL_TRACE_IDX].len());
+    assert_eq!(source_rows.len(), 2);
+    for (slot, &index) in indices[ORIGINAL_TRACE_IDX].iter().enumerate() {
+        assert_eq!(source_rows[slot].len(), 1usize << log_size);
+        reconstructed[ORIGINAL_TRACE_IDX][index] = source_rows[slot].clone();
+    }
+    eprintln!("S3_LOCAL_BASE_SOURCE captured_native_write_trace");"""
     updated = replace_once(updated, old_reconstruction, new_reconstruction)
     old_inversion = """    let mut reconstructed_sum = SecureField::zero();
     for entry in &entries {
@@ -134,7 +136,54 @@ def xor_rust() -> str:
         reconstructed_sum += m * *inverse;
     }"""
     updated = replace_once(updated, old_inversion, new_inversion)
+    updated += r"""
+
+/// Diagnostic-only, immutable source capture before native base commitment.
+/// The original `extend_evals(columns)` receives precisely the same values.
+static XOR8_SOURCE: std::sync::OnceLock<Vec<Vec<BaseField>>> =
+    std::sync::OnceLock::new();
+
+pub fn capture_xor8_source(
+    columns: &[stwo::prover::poly::circle::CircleEvaluation<
+        SimdBackend, BaseField, stwo::prover::poly::BitReversedOrder,
+    >],
+) {
+    let domain = CanonicCoset::new(16).circle_domain();
+    assert_eq!(columns.len(), 2, "pinned native XOR8 trace must have two columns");
+    let mut rows = Vec::with_capacity(2);
+    for column in columns {
+        assert_eq!(column.domain, domain, "XOR8 base column domain is noncanonical");
+        let data = column.values.to_cpu();
+        assert_eq!(data.len(), 65536, "XOR8 base source row count changed");
+        rows.push(data);
+    }
+    assert!(XOR8_SOURCE.set(rows).is_ok(), "XOR8 source captured twice");
+}
+"""
     return updated
+
+
+def instrument_witness(source: str) -> str:
+    old = """        let (verify_bitwise_xor_8_claim, verify_bitwise_xor_8_interaction_gen) = self
+            .verify_bitwise_xor_8
+            .map(|gen| {
+                let (trace, claim, interaction_gen) = gen.write_trace();
+                tree_builder.extend_evals(trace.to_evals());
+                (claim, interaction_gen)
+            })
+            .unzip();"""
+    new = """        let (verify_bitwise_xor_8_claim, verify_bitwise_xor_8_interaction_gen) = self
+            .verify_bitwise_xor_8
+            .map(|gen| {
+                let (trace, claim, interaction_gen) = gen.write_trace();
+                let original_columns = trace.to_evals();
+                #[cfg(feature = "relation-tracker")]
+                crate::debug_tools::relation_tracker::capture_xor8_source(&original_columns);
+                tree_builder.extend_evals(original_columns);
+                (claim, interaction_gen)
+            })
+            .unzip();"""
+    return replace_once(source, old, new)
 
 
 def instrument_prover(source: str) -> str:
@@ -186,6 +235,7 @@ def prepare(root: Path, output: Path) -> dict:
     for path, transform in [
         (SOURCE, instrument_prover),
         (TRACKER_SOURCE, instrument_tracker),
+        (WITNESS_SOURCE, instrument_witness),
     ]:
         original = subprocess.check_output(
             ["git", "-C", str(root), "show", f"HEAD:{path}"], text=True)
@@ -215,7 +265,9 @@ def prepare(root: Path, output: Path) -> dict:
         "expected_base_columns":BASE,
         "batch_inversion":True,
         "preprocessed_source":"same pinned PreProcessedTrace object used by native commitment",
-        "base_source":"committed original-trace polynomial evaluation",
+        "base_source":"exact source rows captured before source-native extend_evals commitment",
+        "base_row_count_check":65536,
+        "producer_write_trace_transform":"feature-gated observation only; original native trace columns committed unchanged",
         "preprocessed_row_domain_check":True,
         "source_file_hashes":[{
             "path":path,

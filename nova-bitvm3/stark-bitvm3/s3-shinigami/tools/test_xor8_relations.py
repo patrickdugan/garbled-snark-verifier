@@ -5,11 +5,11 @@ import unittest
 
 from instrument_xor8_relations import (
     COMPONENT, ENTRIES, LOG_SIZE, PREPROCESSED, BASE, ROWS,
-    xor_rust, instrument_prover, instrument_tracker, SCOPE_LABEL,
+    xor_rust, instrument_prover, instrument_tracker, instrument_witness, SCOPE_LABEL,
 )
 from instrument_local_relations import LOCAL_RUST
 from instrument_relations import OLD_LOOKUP, OLD_TRACKER
-from summarize_xor8_relations import parse, EXPECTED_CLAIM, PREPROCESS_SOURCE
+from summarize_xor8_relations import parse, EXPECTED_CLAIM, BASE_SOURCE, PREPROCESS_SOURCE
 
 PROVER = (
     "    tree_builder.commit(channel);\n"
@@ -23,6 +23,14 @@ TRACKER = (
     "pub fn track_and_summarize_cairo_relations<MC: MerkleChannel>(x: ()) {}\n"
     "pub fn track_cairo_relations<MC: MerkleChannel>(x: ()) {}\n"
 )
+WITNESS = """        let (verify_bitwise_xor_8_claim, verify_bitwise_xor_8_interaction_gen) = self
+            .verify_bitwise_xor_8
+            .map(|gen| {
+                let (trace, claim, interaction_gen) = gen.write_trace();
+                tree_builder.extend_evals(trace.to_evals());
+                (claim, interaction_gen)
+            })
+            .unzip();"""
 
 
 def native_report():
@@ -45,6 +53,7 @@ def native_log(recomputed=EXPECTED_CLAIM, claimed=EXPECTED_CLAIM, flag=True, tru
         "S3_RELATIONS_BEGIN\n"
         "S3_LOCAL_COLUMNS component=verify_bitwise_xor_8 preprocessed=3 base=2 rows=65536\n"
         "S3_LOCAL_PREPROCESS_SOURCE canonical_pinned_original\n"
+        + BASE_SOURCE + "\n"
         "S3_LOCAL_ENTRIES count=131072\n"
         f"S3_LOCAL_LOGUP recomputed={qm(recomputed)} claimed={qm(claimed)} matches={str(flag).lower()}\n"
         + SCOPE_LABEL + "\n"
@@ -75,6 +84,10 @@ class Xor8ComponentTests(unittest.TestCase):
         self.assertIn("S3_LOCAL_PREPROCESS_SOURCE canonical_pinned_original",patched)
         self.assertIn("base source polynomial exceeds selected component degree",patched)
         self.assertIn("assert_eq!(entries.len(), 131072",patched)
+        self.assertIn("captured_native_write_trace",patched)
+        self.assertIn("XOR8_SOURCE.get()",patched)
+        self.assertIn("pub fn capture_xor8_source(",patched)
+        self.assertIn("XOR8_SOURCE.set(rows)",patched)
         self.assertIn("zero local LogUp denominator",patched)
         self.assertIn("add_to_relation_entries(component, &view)",patched)
         self.assertNotIn("range_check_11",patched)
@@ -103,6 +116,19 @@ class Xor8ComponentTests(unittest.TestCase):
         self.assertIn("reconstructed[PREPROCESSED_TRACE_IDX][index] = rows",code)
         self.assertIn("reconstructed[ORIGINAL_TRACE_IDX][index] = rows",code)
 
+    def test_exact_source_rows_captured_without_mutating_commitment(self):
+        patched = instrument_witness(WITNESS)
+        self.assertIn("let original_columns = trace.to_evals();",patched)
+        self.assertIn("capture_xor8_source(&original_columns);",patched)
+        self.assertIn("tree_builder.extend_evals(original_columns);",patched)
+        self.assertIn('#[cfg(feature = "relation-tracker")]',patched)
+        self.assertNotIn("tree_builder.extend_evals(trace.to_evals());",patched)
+        with self.assertRaises(ValueError):
+            instrument_witness(WITNESS.replace("tree_builder.extend_evals(trace.to_evals());",
+                                               "tree_builder.extend_evals(another_trace);"))
+        with self.assertRaises(ValueError):
+            instrument_witness(WITNESS + WITNESS)
+
     def test_changed_upstream_shape_rejected(self):
         with self.assertRaises(ValueError):
             instrument_prover(PROVER.replace("    // Validate lookup argument.", "    // new lookup style."))
@@ -122,6 +148,8 @@ class Xor8ComponentTests(unittest.TestCase):
         self.assertEqual(result["preprocessed_trace_source"],
                          "pinned native original before commitment lifting")
         self.assertEqual(result["base_columns"],2)
+        self.assertEqual(result["base_trace_source"],
+           "pinned native original rows captured before extend_evals commitment")
         self.assertFalse(result["global_relation_balances_verified"])
         self.assertFalse(result["native_proof_verified"])
         self.assertFalse(result["bitcoin_settlement_authorized"])
@@ -143,6 +171,7 @@ class Xor8ComponentTests(unittest.TestCase):
             ("S3_LOCAL_LOGUP","S3_LOCAL_OTHER"),
             (PREPROCESS_SOURCE,"S3_LOCAL_PREPROCESS_SOURCE lifted_commitment"),
             ("CommonLookupElements:","OtherRelation:"),
+            (BASE_SOURCE,BASE_SOURCE.replace("captured_native_write_trace","committed_lifted")),
         ]:
             with self.assertRaises(ValueError,msg=before):
                 parse(native_log().replace(before,after),native_report())

@@ -16,6 +16,7 @@ ENTRIES = 131072
 EXPECTED_CLAIM = (2105135349, 1091656546, 1373784603, 2082926218)
 SCOPE = "S3_LOCAL_SCOPE component=verify_bitwise_xor_8 partial=true"
 PREPROCESS_SOURCE = "S3_LOCAL_PREPROCESS_SOURCE canonical_pinned_original"
+BASE_SOURCE = "S3_LOCAL_BASE_SOURCE captured_native_write_trace"
 COLS = re.compile(
     r"(?m)^S3_LOCAL_COLUMNS component=verify_bitwise_xor_8 preprocessed=(\d+) base=(\d+) rows=(\d+)$"
 )
@@ -30,6 +31,8 @@ def parse(log: str, report: dict) -> dict:
         raise ValueError("missing or duplicated partial XOR8 scope marker")
     if log.count(PREPROCESS_SOURCE) != 1:
         raise ValueError("missing or duplicated native source-preprocessed-table marker")
+    if log.count(BASE_SOURCE) != 1:
+        raise ValueError("missing or duplicated native source-base-row marker")
     cols = COLS.findall(log)
     counts = COUNTS.findall(log)
     comparisons = LOGUP.findall(log)
@@ -56,6 +59,7 @@ def parse(log: str, report: dict) -> dict:
         "preprocessed_columns": pre,
         "preprocessed_trace_source": "pinned native original before commitment lifting",
         "base_columns": base,
+        "base_trace_source": "pinned native original rows captured before extend_evals commitment",
         "raw_relation_entries": nentries,
         "component_logup_recomputed": list(recomputed),
         "component_logup_claimed": list(claimed),

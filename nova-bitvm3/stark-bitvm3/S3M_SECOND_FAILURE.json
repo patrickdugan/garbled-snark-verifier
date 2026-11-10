@@ -1,0 +1,36 @@
+{
+  "stage": "S3m second native XOR8 trial: base source-degree diagnostic failure",
+  "revision": "6696f586252bed29f670dac27fc0befd4e2fe254",
+  "run_id": 42766465895,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42766465895",
+  "upstream_stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+  "upstream_stwo": "aeceb74c",
+  "frozen_trace_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "observed": {
+    "preprocessing_source_marker": true,
+    "base_source_panic": "base source polynomial exceeds selected component degree",
+    "returncode": 101,
+    "elapsed_seconds": 20.218,
+    "peak_rss_bytes": 1582567424,
+    "peak_virtual_bytes": 1781026816,
+    "native_lookup_assertion_reached": false,
+    "component_logup_comparison_reached": false,
+    "native_proof_verified": false
+  },
+  "routine_ci": {
+    "components": "success",
+    "upstream_conformance": "success",
+    "tiny_garbling": "success"
+  },
+  "artifact": {
+    "id": 13739769029,
+    "zip_sha256": "0f4c3597018e62cd383735f195c6825516d63d0cc7c0ffcb0ed0c1aaed8a98cb",
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42766465895/artifacts/13739769029"
+  },
+  "diagnostic_followup": "Capture two original XOR8 65536-row base columns at CairoClaimGenerator.write_trace just before tree_builder.extend_evals, preserving committed inputs and original global assertion.",
+  "authorization": {
+    "full_stark": false,
+    "bitcoin_settlement": false,
+    "ark_utxoref": false
+  }
+}
