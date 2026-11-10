@@ -2,7 +2,7 @@
 # Builds the M16 host script (and through build.rs the guest ELF) in WSL, as guest A was built.
 set -e
 export PATH=/root/.sp1/bin:/root/.cargo/bin:/usr/local/bin:/usr/bin:/bin
-REPO=/mnt/c/Users/patri/OneDrive/Documents/GitHub/garbled-snark-verifier/nova-bitvm3
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 mkdir -p /root/nb3/m16
 rsync -a --delete --exclude target $REPO/m16/sp1/ /root/nb3/m16/sp1/
 cd /root/nb3/m16/sp1/script
