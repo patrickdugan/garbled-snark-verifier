@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "stage": "S3p per-family lookup balance across all components",
+  "code_commit": "0c6e1eb6485c710cb7697283dae2603464646a86",
+  "annotation_commit": "70bfdad092fe5d843cf0a971217d17dacd703546",
+  "base_head": "6b257cb",
+  "runs": [
+    {
+      "run_id": 42846262735,
+      "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42846262735",
+      "commit": "0c6e1eb",
+      "elapsed_seconds": 34.017,
+      "peak_rss_bytes": 3027251200,
+      "artifact": "shinigami-s3-small-0c6e1eb6485c710cb7697283dae2603464646a86",
+      "artifact_zip_digest": "sha256:bb7fee40dacbc689444f7ca31822ba8ad479cdfbafd06b3b7dab3bb656f2fb5d"
+    },
+    {
+      "run_id": 42847980948,
+      "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42847980948",
+      "commit": "70bfdad",
+      "elapsed_seconds": 34.193,
+      "peak_rss_bytes": 3027632128,
+      "artifact": "shinigami-s3-small-70bfdad092fe5d843cf0a971217d17dacd703546",
+      "artifact_zip_digest": "sha256:5b0f45e899f71668530a75b52fcd72df42632dfed9bcc51da9daeb94a9e21e7a",
+      "adds": "unmatched public-memory classification annotation"
+    }
+  ],
+  "source_pins": {
+    "stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+    "stwo": "aeceb74c"
+  },
+  "frozen_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "patch": {
+    "patch_sha256": "f1a25c2a1e9ec0b1422797bb4646f06653fd4ebb5ac58c033fd8d9766fa4ae4b",
+    "rederived_locally_equal": true,
+    "files": [
+      {
+        "path": "stwo_cairo_prover/crates/prover/src/prover.rs",
+        "before_sha256": "8d10febc56e2438e9ca48c59b1e82dd50bcc5f23eb06d0846fe3c90d83368112",
+        "diagnostic_sha256": "bb03057019dde08e988dae74eba6e8ab79a6ff4b308d6b297b03d3bf17a41ce8"
+      },
+      {
+        "path": "stwo_cairo_prover/crates/prover/src/debug_tools/relation_tracker.rs",
+        "before_sha256": "802e78260328b75cee9e56ea9ee54d69c85615debec9a17322f5274fb80f4949",
+        "diagnostic_sha256": "576ec7ab4a22b9a56ad8c65a408e6a0a156dfdf8a0347e9e2d2a2c1bcf0bf623"
+      }
+    ],
+    "read_only_sources": [
+      {"path": "stwo_cairo_prover/crates/cairo-air/src/cairo_components.rs", "sha256": "62706d3fe37c0cbf633183ed2e32f2809863970ae9e45f5a3cc2001e95919f51"},
+      {"path": "stwo_cairo_prover/crates/cairo-air/src/relations.rs", "sha256": "7523461e3600c6569ad596d756737d9b9901d4e58b7616d70affea1f357c8ee0"}
+    ]
+  },
+  "capture": {
+    "boundary": "producer tree builder wrapped; every extend_evals column copied then forwarded unchanged",
+    "base_tree_columns": 717,
+    "base_tree_cells": 23690176,
+    "compiled_components": 66,
+    "components_evaluated": 37,
+    "components_skipped": [],
+    "evaluator": "upstream stwo_constraint_framework::relation_tracker::add_to_relation_entries, unmodified"
+  },
+  "result": {
+    "all_component_claims_reproduced": true,
+    "public_data_decomposition_equals_native_logup_sum": true,
+    "public_qm31": [559615079, 1208624373, 2076115172, 2076164551],
+    "families_observed": 37,
+    "families_zero": 35,
+    "nonzero_family_tags": [1444891767, 1662111297],
+    "families_sum_qm31": [1866027004, 1908263159, 1713629672, 1017174456],
+    "global_lookup_sum_qm31": [1866027004, 1908263159, 1713629672, 1017174456],
+    "families_reproduce_global_lookup_sum": true,
+    "nonzero_families": {
+      "1444891767": {"name": "MEMORY_ADDRESS_TO_ID", "entries": 1450764, "mult_sum_mod_p": 86383, "qm31": [172666291, 399726568, 390611892, 636400385]},
+      "1662111297": {"name": "MEMORY_ID_TO_BIG", "entries": 811788, "mult_sum_mod_p": 86383, "qm31": [1693360713, 1508536591, 1323017780, 380774071]}
+    },
+    "tuple_ledgers": {
+      "OPCODES": {"distinct": 157303, "nonzero": 0},
+      "MEMORY_ADDRESS_TO_ID": {"distinct": 524288, "nonzero": 86383, "net_each": 1},
+      "MEMORY_ID_TO_BIG": {"distinct": 81920, "nonzero": 24405}
+    },
+    "unmatched_address_uses": {
+      "total": 86383,
+      "in_public_memory": 86383,
+      "outside_public_memory": 0,
+      "sections": {
+        "program": {"public_entries": 169856, "unmatched": 0},
+        "safe_call": {"public_entries": 2, "unmatched": 0},
+        "segments": {"public_entries": 22, "unmatched": 16},
+        "output": {"public_entries": 86388, "unmatched": 86367}
+      },
+      "runs": [
+        {"start": 169862, "length": 8},
+        {"start": 292264, "length": 8},
+        {"start": 292296, "length": 86367}
+      ]
+    }
+  },
+  "cause": {
+    "input_public_segment_context_present": "all eleven true (bootloader default)",
+    "program_builtins_with_segments": ["output", "range_check_builtin", "bitwise_builtin"],
+    "input_public_memory_addresses": 169885,
+    "input_public_memory_addresses_composition": "program 169856 + safe call 2 + three start and three stop pointers 6 + output 21",
+    "claim_extraction": "extract_public_segments reads 11 start pointers from initial_ap and 11 stop pointers ending at final_ap; the output stop pointer is a wrong cell, so the output section has 86388 entries instead of 21",
+    "yield_side": "create_cairo_claim_generator adds table multiplicities from the input's public_memory_addresses, not from the claim's public data"
+  },
+  "native_diagnostic": {
+    "global_native_lookup_assertion_failed": true,
+    "global_residual_qm31": [1866027004, 1908263159, 1713629672, 1017174456],
+    "native_exit_code": 101,
+    "rss_limit_bytes": 4294967296,
+    "timeout_seconds": 120,
+    "native_proof_produced": false,
+    "native_proof_verified": false
+  },
+  "local_cross_check": {
+    "environment": "WSL Ubuntu-24.04, same pins, standalone input regenerated with Scarb 2.18.0",
+    "elapsed_seconds": 46.783,
+    "peak_rss_bytes": 3028176896,
+    "identical_to_ci": true
+  },
+  "ci": {
+    "components": "success",
+    "upstream_conformance": "success",
+    "tiny_garbling": "success",
+    "native_ledger": "success_on_expected_proof_rejection",
+    "evidence_annotations": "S3P result, S3P families, S3P components, S3P tuples, S3P unmatched, S3P resources, S3P patch"
+  },
+  "next_gate": "S3q: run the unmodified pinned prover on the input with only public_segment_context.present corrected.",
+  "authorization": {
+    "full_shinigami_stark": false,
+    "bitvm3_dispute_protocol": false,
+    "ark_utxoref_state": false
+  }
+}

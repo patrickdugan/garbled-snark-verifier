@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "stage": "S3q native-verified proof of the Shinigami standalone trace with the public segment context corrected",
+  "code_commit": "0c6e1eb6485c710cb7697283dae2603464646a86",
+  "run_commit": "ff9d526da9562f102964a9ec672096aaef5bcb88",
+  "run_id": 42849912173,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42849912173",
+  "job": "s3-small-profile",
+  "hypothesis_from": "S3p: the residual is 86,383 public-memory entries produced by the all-present public segment context",
+  "source_pins": {
+    "stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+    "stwo": "aeceb74c"
+  },
+  "prover": "unmodified pinned Stwo-Cairo prove binary, default feature set, profile canonical-small-96.json, --verify",
+  "frozen_input": {
+    "bytes": 9624654,
+    "sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+    "compressed_bytes": 1737490
+  },
+  "context_correction": {
+    "field": "public_segment_context.present",
+    "builtin_order": [
+      "output",
+      "pedersen_builtin",
+      "range_check_builtin",
+      "ecdsa_builtin",
+      "bitwise_builtin",
+      "ec_op_builtin",
+      "keccak_builtin",
+      "poseidon_builtin",
+      "range_check96_builtin",
+      "add_mod_builtin",
+      "mul_mod_builtin"
+    ],
+    "before": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "after": [
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "present_builtins": [
+      "output",
+      "range_check_builtin",
+      "bitwise_builtin"
+    ],
+    "public_memory_addresses_in_input": 169885,
+    "only_applied_from_all_present_default": true,
+    "all_other_input_keys_unchanged": true
+  },
+  "corrected_input": {
+    "bytes": 9624662,
+    "sha256": "d9e259e05bfb7c85079cdb43c9dbe2a8d18aa75f86a7ba601886035d2fe22e3c"
+  },
+  "result": {
+    "native_proof_verified": true,
+    "native_verifier": "stwo-cairo 467d5c6d cairo_air verifier, run by the prover's --verify",
+    "proof_bytes": 47197275,
+    "proof_sha256": "ab65f8373baf77f96e2f18e40a93f8897cfa67ff39eccb30dbedcb44f00fabb2",
+    "elapsed_seconds": 32.122,
+    "peak_rss_bytes": 2656403456,
+    "peak_vms_bytes": 2779144192,
+    "rss_limit_bytes": 4294967296,
+    "timeout_seconds": 120,
+    "returncode": 0,
+    "status": "native_small_profile_verified_application_binding_outstanding"
+  },
+  "local_cross_check": {
+    "environment": "WSL Ubuntu-24.04, standalone input regenerated with Scarb 2.18.0 (not byte-identical to the frozen file)",
+    "unmodified_prover": {
+      "elapsed_seconds": 63.789,
+      "peak_rss_bytes": 2652856320,
+      "proof_sha256": "ab65f8373baf77f96e2f18e40a93f8897cfa67ff39eccb30dbedcb44f00fabb2"
+    },
+    "diagnostic_prover": {
+      "elapsed_seconds": 43.488,
+      "peak_rss_bytes": 2757668864,
+      "proof_sha256": "ab65f8373baf77f96e2f18e40a93f8897cfa67ff39eccb30dbedcb44f00fabb2"
+    },
+    "unmodified_binary_contains_diagnostic_strings": false,
+    "proofs_bit_identical_to_ci": true
+  },
+  "profile": {
+    "name": "canonical_small",
+    "recorded_security": "96-bit upstream nominal FRI PoW+queries",
+    "production_profile": false
+  },
+  "ci": {
+    "components": "success",
+    "upstream_conformance": "success",
+    "tiny_garbling": "success",
+    "native_corrected_context": "success"
+  },
+  "artifact": {
+    "name": "shinigami-s3-small-ff9d526da9562f102964a9ec672096aaef5bcb88",
+    "zip_digest": "sha256:cd9ada22fb7c418ba06f5c282f5076ffe652dab343967c150f66ffbd99420458",
+    "zip_bytes_approx": 1950000
+  },
+  "native_proof_verified": true,
+  "bound": {
+    "application_statement_authenticated": false,
+    "program_identity_bound": false,
+    "receipt_bound": false,
+    "public_segment_layout_pinned_by_a_verifier": false
+  },
+  "next_gate": "Choose the verifier revision that matches this proof format, define the public-memory contract (program hash, output words, segment layout), build the proof-independent verifier template and measure its Boolean gate and input-bit counts.",
+  "authorization": {
+    "full_shinigami_stark_application_receipt": false,
+    "boolean_garbled_verifier_of_this_proof": false,
+    "bitvm3_dispute_protocol": false,
+    "ark_utxoref_state": false
+  }
+}

@@ -23,7 +23,20 @@ The run is limited to 4 GiB sampled RSS and 120 seconds, and it records the proo
 
 The proof is 47,197,275 bytes of JSON with SHA-256 `ab65f8373baf77f96e2f18e40a93f8897cfa67ff39eccb30dbedcb44f00fabb2`, **identical** from both builds, so the prover is deterministic and the diagnostic patch does not touch it. The same input with the default context fails the native assertion with the S3f residual, as before.
 
-CI result: see the section below once the run is archived.
+## CI result on the frozen artifact
+
+[Run 42849912173](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42849912173), job `s3-small-profile`, commit `ff9d526`, frozen standalone input (SHA-256 `c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55`, restored and re-hashed by the tool):
+
+| Quantity | Value |
+|---|---|
+| Context correction | `[true x 11]` to `[true, false, true, false, true, false, false, false, false, false, false]` (output, range_check, bitwise) |
+| Corrected input | 9,624,662 bytes, SHA-256 `d9e259e05bfb7c85079cdb43c9dbe2a8d18aa75f86a7ba601886035d2fe22e3c` |
+| Native prover and verifier | unmodified Stwo-Cairo `467d5c6d`, `canonical_small` profile, `--verify`, **accepted** |
+| Proof | 47,197,275 bytes, SHA-256 `ab65f8373baf77f96e2f18e40a93f8897cfa67ff39eccb30dbedcb44f00fabb2`, **identical to the local proof** |
+| Runtime and memory | 32.122 s, peak sampled RSS 2,656,403,456 bytes (limits: 120 s, 4,294,967,296 bytes) |
+| Report status | `native_small_profile_verified_application_binding_outstanding`; `application_statement_authenticated` and `program_identity_bound` are false |
+
+The routine jobs of the same run passed. The artifact `shinigami-s3-small-ff9d526da9562f102964a9ec672096aaef5bcb88` (zip digest `sha256:cd9ada22fb7c418ba06f5c282f5076ffe652dab343967c150f66ffbd99420458`) holds the proof and the run report.
 
 ## What this establishes, and what it does not
 

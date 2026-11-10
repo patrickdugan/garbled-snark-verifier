@@ -1,5 +1,23 @@
 # Continuation after S2 and S3a
 
+## S3q: the native Shinigami proof blocker is cleared (laboratory profile)
+
+The global lookup residual of S3f to S3o was an **input mismatch**, not a prover or AIR defect. S3p ([S3P.md](S3P.md), [run 42847980948](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42847980948)) evaluated all 37 active components, each of which reproduces its native claim, and balanced every relation family: 35 are exactly zero and the two memory relations carry the whole residual, +86,383 uses each. All 86,383 unmatched address uses are public-memory entries. The frozen prover input declares all eleven builtin segments public (the bootloader default) although the standalone Shinigami executable has three (output, range_check, bitwise), so the claim lists 86,367 builtin cells as program output and eight garbage pointer cells at each end, none of which the memory tables yielded; the VM's own `public_memory_addresses` already matches the real layout.
+
+S3q ([S3Q.md](S3Q.md), [run 42849912173](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42849912173)) changes only `public_segment_context.present` to `[true,false,true,false,true,false,false,false,false,false,false]` and runs the unmodified pinned prover with its built-in verification: **the native verifier accepts a complete proof** of the frozen standalone CSV execution, 47,197,275 bytes (SHA-256 `ab65f837…fabb2`, identical locally and in CI), 32.1 s, 2.66 GB peak RSS, under the 120 s and 4 GiB caps. The profile is the laboratory `canonical_small` (96-bit nominal FRI); the proof binds no program identity, receipt or application statement.
+
+The flags `native_proof_verified` can now be true for this profile; every application and Bitcoin flag stays false. Default CI stays proof-free; `[s3-context]` is the explicit opt-in.
+
+### Next: the verifier side
+
+1. **Matched pair.** The proof format is Stwo-Cairo `467d5c6d` (Scarb 2.18's producer). The Boolean verifier of S2 is pinned to Stwo `e9a38e12`. Decide between porting that verifier to this format (`CairoProofForRustVerifier`) and re-proving with a prover at the S2 revision with the same context correction; measure both.
+2. **Public-memory contract.** The verifier must pin the expected program (the 169,856-word executable hash), the 21 output words, the initial and final state, and the `present` vector of the public segment layout: a prover that chose another vector would produce a different claim. Bind all of it, not only a generic acceptance.
+3. **Input size.** The 47 MB JSON is not the wire format. Measure the binary proof (`CairoProofForRustVerifier`), the number of authenticated input bits and the Boolean gate count of the proof-independent verifier template for this revision before any garbling.
+4. **Profile.** Replace the 96-bit laboratory profile by a reviewed production configuration and rebuild the template for it; do not scale the S2 gate count.
+5. Keep Nova, SP1 and CUDA proving outside this workstream.
+
+The producer default is worth reporting upstream: at `467d5c6d` the adapter (`stwo_cairo_prover/crates/adapter/src/adapter.rs`, line 45) calls `PublicSegmentContext::bootloader_context()` unconditionally, and the prover input Scarb 2.18 wrote for this standalone executable carries that all-present context, so an executable with fewer than eleven builtins gets an unbalanced claim.
+
 ## S3o: XOR8 zero tuple cancels at the caller AIR
 
 [Run 42834108025](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42834108025) evaluated the pinned `bitwise_builtin` AIR, through upstream's unmodified relation evaluator, on its 4,096 original base rows. All 4,096 positive XOR8 entries are `[112558620,0,0,0]` (+4,096); the table side is `-4096`. The signed M31 ledger and the QM31 sum under the native challenge are both zero, six negative controls (missing, duplicated or altered entries) are all detected, and the component's full LogUp sum equals its native claim. Native run: 17.903 s, 1.64 GB peak RSS, exit 101. The global lookup assertion still fails with the same residual and no proof exists. See [S3O.md](S3O.md) and [S3O_RESULTS.json](S3O_RESULTS.json).
