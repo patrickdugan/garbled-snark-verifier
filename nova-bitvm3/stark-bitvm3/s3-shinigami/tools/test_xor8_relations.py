@@ -82,7 +82,8 @@ class Xor8ComponentTests(unittest.TestCase):
         self.assertIn("preprocessed_trace.columns.get(index)",patched)
         self.assertIn("column.gen_column_simd().values.to_cpu()",patched)
         self.assertIn("S3_LOCAL_PREPROCESS_SOURCE canonical_pinned_original",patched)
-        self.assertIn("base source polynomial exceeds selected component degree",patched)
+        self.assertIn("S3_LOCAL_BASE_SOURCE captured_native_write_trace",patched)
+        self.assertNotIn("base source polynomial exceeds selected component degree",patched)
         self.assertIn("assert_eq!(entries.len(), 131072",patched)
         self.assertIn("captured_native_write_trace",patched)
         self.assertIn("XOR8_SOURCE.get()",patched)
@@ -114,7 +115,8 @@ class Xor8ComponentTests(unittest.TestCase):
         self.assertIn("assert_eq!(column.log_size(), log_size",code)
         self.assertIn("expected_ids[slot]",code)
         self.assertIn("reconstructed[PREPROCESSED_TRACE_IDX][index] = rows",code)
-        self.assertIn("reconstructed[ORIGINAL_TRACE_IDX][index] = rows",code)
+        self.assertIn("reconstructed[ORIGINAL_TRACE_IDX][index] = source_rows[slot].clone()",code)
+        self.assertIn("XOR8_SOURCE.get()",code)
 
     def test_exact_source_rows_captured_without_mutating_commitment(self):
         patched = instrument_witness(WITNESS)
