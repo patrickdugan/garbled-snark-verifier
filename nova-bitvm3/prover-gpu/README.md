@@ -73,3 +73,21 @@ awake on AC power avoids the restarts:
 powercfg /change standby-timeout-ac 0
 powercfg /change monitor-timeout-ac 0
 ```
+
+### Under a host memory guard
+
+On a laptop shared with other work, a watchdog that stops the prover when Windows runs short of
+memory keeps the machine usable. Two things went wrong with one during the M16 mainnet run
+(2026-11-10):
+
+- A killed prover leaves its SP1 shared-memory files in `/dev/shm`, about 0.5 to 4 GiB each, and
+  they stay in RAM until removed. By 14:16 UTC files from earlier killed runs held 7.6 GiB, and from
+  then on the guard killed every restart within a minute. `supervise.sh` now removes the files no
+  process holds before each restart, and resumes after an outside SIGTERM or SIGKILL (exit 143 or
+  137) instead of exiting. [`scripts/test-supervise.sh`](scripts/test-supervise.sh) checks this
+  with a fake prover; the previous script fails it.
+- The guard read `FreePhysicalMemory`, which leaves out the standby list that Windows hands back
+  on demand: it saw 0.95 GiB with 3.95 GiB available. Reading available memory still killed
+  restarts, because a restart takes about 5 GiB in under a minute, faster than Windows trims idle
+  working sets. The run resumed under a guard that kills when available memory stays below
+  1.5 GiB for 30 s, or falls below 0.8 GiB at any moment.
