@@ -1,0 +1,29 @@
+{
+  "stage": "S3h relation audit initial run: upstream tracker domain-length panic",
+  "commit": "33495264d345e05b3a20d00cfe132dba54c1b4da",
+  "run_id": 42751015710,
+  "ci_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42751015710",
+  "input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "result": {
+    "native_proof_verified": false,
+    "relation_summary_complete": false,
+    "original_native_lookup_assertion_reached": false,
+    "panic": "constraint-framework/src/prover/relation_tracker.rs:95:27 index out of bounds: the len is 2 but the index is 2",
+    "elapsed_seconds": 25.981,
+    "peak_rss_bytes": 2070794240,
+    "peak_vms_bytes": 2130518016,
+    "returncode": 101,
+    "rss_limit_bytes": 4294967296
+  },
+  "root_cause": "Upstream diagnostic reconstructs polynomial on reduced-degree domain rather than the source trace domain; relation evaluator indexes by original component row.",
+  "next_fix": "Use original poly.evals.domain to reconstruct full-length trace columns, diagnostic-only under original assertions.",
+  "artifact": {
+    "id": 13734345821,
+    "sha256": "b6ec404a41aa84bbeebcb1b62be79fe63d05d3511b24cbe0588ffe2773258bbb"
+  },
+  "security": {
+    "shinigami_native_proof": false,
+    "garbled_cairo_proof": false,
+    "ark_utxoref_settlement": false
+  }
+}

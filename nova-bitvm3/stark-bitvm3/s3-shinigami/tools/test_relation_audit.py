@@ -1,7 +1,10 @@
 """Proof-free tests for a bounded, feature-gated native Cairo relation audit."""
 import unittest
 
-from instrument_relations import OLD_LOOKUP, OLD_TRACKER, instrument
+from instrument_relations import (
+    OLD_LOOKUP, OLD_TRACKER, TRACKER_OLD, TRACKER_NEW,
+    instrument, restore_tracker_domain,
+)
 from summarize_relations import summarize
 
 CHECK = (
@@ -57,6 +60,19 @@ class RelationAuditTests(unittest.TestCase):
         self.assertEqual(modified.count("lookup_sum(&claim, &interaction_elements, &interaction_claim)"),3)
         self.assertIn('#[cfg(not(feature = "relation-tracker"))]', modified)
         self.assertEqual(modified.count("RelationSummary"),0)
+
+    def test_tracker_domain_retains_full_evaluation_length(self):
+        altered = restore_tracker_domain(TRACKER_OLD)
+        self.assertEqual(altered, TRACKER_NEW)
+        self.assertIn("let original_domain = poly.evals.domain;", altered)
+        self.assertIn(".evaluate(original_domain)", altered)
+        self.assertNotIn(".evaluate(CanonicCoset::new(coeffs.log_size()).circle_domain())", altered)
+
+    def test_tracker_patch_fails_on_changed_domain_source(self):
+        with self.assertRaises(ValueError):
+            restore_tracker_domain(TRACKER_OLD.replace("poly.evals.clone()", "poly.evals.to_owned()"))
+        with self.assertRaises(ValueError):
+            restore_tracker_domain(TRACKER_OLD + TRACKER_OLD)
 
     def test_source_fail_closed(self):
         self.assertTrue(source_error(CHECK.replace("    tree_builder.commit(channel);\n","",1)))

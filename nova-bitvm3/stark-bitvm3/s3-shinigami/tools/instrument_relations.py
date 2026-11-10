@@ -18,6 +18,25 @@ import subprocess
 
 REV = "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73"
 SOURCE = "stwo_cairo_prover/crates/prover/src/prover.rs"
+TRACKER_SOURCE = "stwo_cairo_prover/crates/prover/src/debug_tools/relation_tracker.rs"
+# Upstream's degree reduction shortened constant columns to two evaluations.
+# The evaluator subsequently indexed them using their original trace row count.
+TRACKER_OLD = """                let coeffs = reduce_degree(poly.evals.clone().interpolate());
+                coeffs
+                    .evaluate(CanonicCoset::new(coeffs.log_size()).circle_domain())
+                    .values
+                    .to_cpu()
+"""
+TRACKER_NEW = """                // Preserve the original trace domain when reconstructing rows.
+                // Reducing the coefficient degree must not reduce the row count:
+                // the relation evaluator indexes using the component trace domain.
+                let original_domain = poly.evals.domain;
+                let coeffs = reduce_degree(poly.evals.clone().interpolate());
+                coeffs
+                    .evaluate(original_domain)
+                    .values
+                    .to_cpu()
+"""
 FEATURE = "stwo-cairo-prover/relation-tracker"
 OLD_LOOKUP = """    // Validate lookup argument.
     debug_assert_eq!(
@@ -116,6 +135,14 @@ def instrument(source: str) -> str:
     return patched
 
 
+def restore_tracker_domain(source: str) -> str:
+    if source.count(TRACKER_OLD) != 1:
+        raise ValueError("source-pinned relation tracker row-domain layout changed")
+    if source.count(".evaluate(CanonicCoset::new(coeffs.log_size()).circle_domain())") != 1:
+        raise ValueError("upstream reduced-row tracker expression changed")
+    return source.replace(TRACKER_OLD, TRACKER_NEW)
+
+
 def prepare(root: Path, destination: Path) -> dict:
     root = root.resolve()
     head = subprocess.check_output(
@@ -127,11 +154,23 @@ def prepare(root: Path, destination: Path) -> dict:
     path = root / SOURCE
     if path.read_text() != original:
         raise ValueError("pinned source was already modified")
+    tracker_original = subprocess.check_output(
+        ["git", "-C", str(root), "show", f"HEAD:{TRACKER_SOURCE}"], text=True)
+    tracker_path = root / TRACKER_SOURCE
+    if tracker_path.read_text() != tracker_original:
+        raise ValueError("pinned relation tracker source was already modified")
     modified = instrument(original)
+    tracker_modified = restore_tracker_domain(tracker_original)
+    # Validate both files before changing either ephemeral upstream file.
     path.write_text(modified)
+    tracker_path.write_text(tracker_modified)
     patch = "".join(difflib.unified_diff(
         original.splitlines(keepends=True), modified.splitlines(keepends=True),
         fromfile="a/"+SOURCE, tofile="b/"+SOURCE))
+    patch += "".join(difflib.unified_diff(
+        tracker_original.splitlines(keepends=True),
+        tracker_modified.splitlines(keepends=True),
+        fromfile="a/"+TRACKER_SOURCE, tofile="b/"+TRACKER_SOURCE))
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(patch)
     return {
@@ -141,6 +180,10 @@ def prepare(root: Path, destination: Path) -> dict:
         "source": SOURCE,
         "source_before_sha256": hashlib.sha256(original.encode()).hexdigest(),
         "source_after_sha256": hashlib.sha256(modified.encode()).hexdigest(),
+        "tracker_source": TRACKER_SOURCE,
+        "tracker_before_sha256": hashlib.sha256(tracker_original.encode()).hexdigest(),
+        "tracker_after_sha256": hashlib.sha256(tracker_modified.encode()).hexdigest(),
+        "tracker_row_count_preserved": True,
         "patch_sha256": hashlib.sha256(patch.encode()).hexdigest(),
         "max_debug_output_bytes": TEXT_CAP,
         "native_lookup_assertion_preserved": True,
