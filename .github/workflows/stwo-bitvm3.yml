@@ -31,6 +31,10 @@ on:
         description: 'Try one native Cairo STARK with the pinned small preprocessing profile'
         type: boolean
         default: false
+      s3_lookup_diag:
+        description: 'Diagnose one pinned Cairo lookup residual; native proof remains rejected'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -363,8 +367,8 @@ jobs:
     # Reduced preprocessed table (10.2m vs 543m cells) and smaller FFT lifting.
     # Only one explicit proof is allowed; routine CI stays proof-free.
     if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.s3_small_profile) ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-small-profile]'))
+      (github.event_name == 'workflow_dispatch' && (inputs.s3_small_profile || inputs.s3_lookup_diag)) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[s3-small-profile]') || contains(github.event.head_commit.message, '[s3-lookup]')))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -373,6 +377,7 @@ jobs:
       CARGO_INCREMENTAL: '0'
       RUSTFLAGS: '-C debuginfo=0'
       RUST_MIN_STACK: '16777216'
+      S3_LOOKUP_DIAG: ${{ (github.event_name == 'workflow_dispatch' && inputs.s3_lookup_diag) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-lookup]')) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -399,6 +404,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/check_low_memory_profile.py --upstream vendor/stwo-cairo | tee out/small-profile-preflight.json
+          if [[ "$S3_LOOKUP_DIAG" == "true" ]]; then
+            python3 tools/instrument_lookup.py --upstream vendor/stwo-cairo --output out/small-profile-lookup.patch | tee out/small-profile-instrument.json
+          fi
           timeout --kill-after=5s 600s cargo +nightly-2025-06-23 build --locked \
             --profile witness-opt-1 \
             --manifest-path vendor/stwo-cairo/stwo_cairo_prover/Cargo.toml \
@@ -408,7 +416,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/prove_low_memory.py --prove-small-once --rss-mib 4096 --timeout-seconds 120
+          if [[ "$S3_LOOKUP_DIAG" == "true" ]]; then
+            set +e
+            python3 tools/prove_low_memory.py --prove-small-once --rss-mib 4096 --timeout-seconds 120
+            status=$?
+            set -e
+            if [[ "$status" -eq 0 ]]; then
+              echo "Native proof unexpectedly succeeded during diagnostic: manual review required"; exit 1
+            fi
+            python3 tools/summarize_lookup.py --log out/small-profile-proving.txt --report out/small-profile-report.json --output out/small-profile-lookup-summary.json
+          else
+            python3 tools/prove_low_memory.py --prove-small-once --rss-mib 4096 --timeout-seconds 120
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -416,4 +435,5 @@ jobs:
           path: |
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/small-profile-*.txt
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/small-profile-*.json
+            nova-bitvm3/stark-bitvm3/s3-shinigami/out/small-profile-*.patch
           if-no-files-found: warn
