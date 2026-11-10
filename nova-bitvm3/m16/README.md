@@ -84,14 +84,41 @@ Payment:
 | block.bin | `41600bb8…aae8` |
 | payment.bin | `6a50449f…d2a9` |
 
-Fold:
-- two shards (0–487,536 and 487,536–975,072), 10 threads each, on a 20-thread laptop CPU;
-- 413.1 s per 2,000 headers per shard, so about 9.7 headers/s combined;
+Fold, 2026-11-08 16:58 to 2026-11-10 07:09 UTC:
+- two shards (0–487,536 and 487,536–975,072), 10 threads each, on a 20-thread laptop CPU, both
+  exited 0;
+- 137,435 s (38.2 h) wall time for the slower shard, about 345 MB RSS per process;
+- with the machine to themselves the shards did 2,000 headers each in 370 to 413 s, about
+  10 headers/s combined. For about a day the [M17](../m17) runs shared the CPU, and the average
+  over the whole fold was 3.55 headers/s per shard;
 - earlier benchmarks: 5.2 headers/s with one process, 10.4 with 2 × 10, 14.4 with 4 × 5, 16.3 with
   6 × 3.
 
-Two shards trade CPU time against guest cost:
-- each extra segment adds a Nova verification to the guest. With raw keys that is about
-  13 × 10^9 instructions: 21.2 × 10^9 for one segment against 34.1 × 10^9 for two.
-- the expected mainnet guest is about 34 × 10^9 instructions. Guest A's GPU rate was about
-  6.6 × 10^9 per hour.
+Two shards trade CPU time against guest cost: each extra segment adds a Nova verification to the
+guest. With raw keys that is about 13 × 10^9 instructions: 21.2 × 10^9 for one segment against
+34.1 × 10^9 for two.
+
+Export and guest execution (`nova-chain export`, `btc-header-fold verify-bundle`, then
+`m16-nova-spv-script segments`, `execute`, `mutations`):
+
+| Step | Result |
+| --- | --- |
+| export s0, s1 | 44.5 s and 31.1 s; 12,596-byte bundles `217334e1…e084` and `a7bb0ddf…7af02` |
+| native verify of each bundle, compressed key `6aa50d09…da1d` | accepted, 7.8 s and 7.0 s |
+| segments file | 25,204 bytes, `bdbd28e6…c878` |
+| execute, raw key `4e815db8…7615`, ELF `bb7d51b0…` | 34,055,622,753 instructions, 1,283 s, 7.5 GB peak RSS |
+| compressed key in place of the raw key | refused |
+| the 13 mutations listed above | all refused (3,589 s in total) |
+
+Where the instructions go: Nova verification 29.18 × 10^9, hashing the key 2.78 × 10^9, decoding
+the key 2.04 × 10^9, decoding the proofs 52 × 10^6, the payment 259,390, the tip check 14,192.
+
+Statement, 1,292 bytes, SHA-256 `cae6068f7ad8c4891cb3220702a88b0bc3df54013f45e65df11a9ced531bc869`:
+- NHC1, k = 1, 975,072 steps, z0 at genesis;
+- tip 975,072 (`…6ff792`), chainwork `0x156c4c3c54ad473bac5daf261`. Height, hash and chainwork
+  equal Core's `getblockheader` at the tip;
+- payment: block 975,067 (`…55fe22`), 6 confirmations, txid `a652ab0c…0045`, output 0,
+  940,000 sats, 22-byte script `58432f41…7283`.
+
+Next: prove this execution on the GPU (about 34 × 10^9 instructions; guest A ran at about
+6.6 × 10^9 per hour), wrap it, and evaluate the M14 circuit on the wrapped statement.
