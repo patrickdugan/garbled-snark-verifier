@@ -1,5 +1,9 @@
 # Direct Stwo-to-Boolean prototype
 
+## Latest S3m checkpoint: XOR8 component agreement
+
+The source-captured `verify_bitwise_xor_8` native diagnostic matched its claimed QM31 LogUp value across **131,072 source-row relation entries**, with 1.60 GB peak RSS and 19.015 seconds of native runtime. The local M31 relation cleanup leaves a single zero-input tuple of multiplicity −4096 at tag `112558620`. The original global LogUp assertion still rejects the Shinigami proof. All four jobs passed in [run 42769770190](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42769770190). See [S3M.md](S3M.md) and [S3M_RESULTS.json](S3M_RESULTS.json).
+
 ## Latest relation-audit result: S3j
 
 [Run 42753720798](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42753720798) tested a source-pinned diagnostic that skipped reconstructing the unused interaction tree. It still exceeded **4 GiB sampled RSS** before reporting unmatched tuples. The native proof and lookup assertion remained incomplete; all three routine CI jobs passed. See [S3J.md](S3J.md) and [S3J_RESULTS.json](S3J_RESULTS.json). Further experiments target component-local trace reconstruction.

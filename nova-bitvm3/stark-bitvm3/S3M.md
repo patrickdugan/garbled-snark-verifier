@@ -55,3 +55,20 @@ A third ephemeral file patch is now required under the source pin: `crates/prove
 ## Native producer-source capture activation
 
 The corrected diagnostic in commit `759bd19d` passed all three routine jobs in [run 42769587860](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42769587860). Fast tests now validate the exact upstream witness-write hook, both source-memory markers, unchanged commitment inputs and fail-closed LogUp claim parsing. The next separate `[s3-xor8]` marker authorizes exactly **one** source-pinned native diagnostic using the unchanged 4 GiB RSS watchdog, 120-second native runtime, and 15-minute total CI limit. Its purpose is to determine whether the native `verify_bitwise_xor_8` claim agrees with the 131,072 source-row relations; it cannot authorize a full Cairo/Bitcoin proof.
+
+## Third native trial: exact XOR8 component agreement
+
+The source-captured trial [42769770190](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42769770190) succeeded as a **diagnostic with the original proof rejected**. Its source pin includes the original `CairoClaimGenerator::write_trace` for the two base columns and `PreProcessedTrace` for the three preprocessing columns. The original columns were then committed unchanged.
+
+The 65,536 source rows generated **131,072** signed `CommonLookupElements` relation entries. Using the native Fiat–Shamir challenge and batch inversion, the exact reconstructed QM31 sum was
+`(2105135349 + 1091656546i) + (1373784603 + 2082926218i)u`, equal in all four limbs to `interaction_claim.verify_bitwise_xor_8.claimed_sum`.
+
+The local multiplicity cleanup left exactly **one** nonzero tuple: `[112558620] -> 2147479551 (M31)`, the signed M31 representative **−4096** with all trailing tuple limbs zero. This is a partial table balance; some other components use the same relation tag. The pinned upstream source shows that `triple_xor_32`, `bitwise_builtin`, `blake_g`, and `blake_compress_opcode` emit positive uses with the tag `112558620`. Their corresponding tuple multiplicities still need to be checked before classifying the residue.
+
+Native diagnostic time **19.015 seconds**, peak sampled RSS **1,604,800,512 bytes**, peak VMS **1,781,555,200 bytes**. The native global LogUp assertion subsequently rejected with the same pinned residual `(1866027004 + 1908263159i) + (1713629672 + 1017174456i)u`. The proof process exited 101, and no native Cairo STARK was produced or verified. All four CI jobs passed. [S3M_RESULTS.json](S3M_RESULTS.json) pins the exact experiment, patch digest and security flags; [artifact 13741980559](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42769770190/artifacts/13741980559) holds the source patch, native process log and strict parser output (ZIP SHA-256 `c7eeb14418aba3b005f6d4c4030b35577ad6d22090cbab5f579545f8e0cb40ed`).
+
+## Proposed S3n cancellation audit
+
+Preserve the source-pinned challenge and witness. Audit **the tag `112558620`** in its producing components, especially padded rows that generate the zero tuple `[112558620,0,0,0]`. The immediate goal is to determine whether these counterparties account for +4096 uses that cancel the XOR8 table's −4096 supply. The current data do not establish a missing use, so this remains a falsifiable hypothesis.
+
+A memory-bounded approach can capture only relevant component base columns at `write_trace`, evaluate the unmodified native relation evaluator, and increment one signed M31 counter per matching tuple. Compare its sum with the table supply and check each component's native LogUp claim. Use the usual opt-in 4 GiB sampled RSS and 120-second bound, with the unmodified global assertion as the proof gate. Avoid reconstructing entire trace trees or interpreting per-component equality as a complete Cairo proof.

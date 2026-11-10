@@ -1,5 +1,11 @@
 # Continuation after S2 and S3a
 
+## S3m completed: XOR8 source rows agree with native claim
+
+[Run 42769770190](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42769770190) successfully compared `verify_bitwise_xor_8` source rows with its pinned native interaction claim. Recomputed QM31 LogUp matched all four limbs from **131,072** relation entries. The local signed multiplicity ledger leaves one tuple `[112558620] -> -4096` (mod M31). This is a component-local result; the global lookup assertion still fails. Peak sampled RSS **1.60 GB**, native runtime **19.015 seconds**. All four CI jobs passed; [S3M.md](S3M.md) and [S3M_RESULTS.json](S3M_RESULTS.json) preserve the evidence.
+
+Next source-track positive uses of the XOR8 tag `112558620` through `triple_xor_32`, `bitwise_builtin`, `blake_g`, and `blake_compress_opcode`. Determine whether their zero-input padded-row multiplicities cancel −4096. Use the source-pinned original Cairo row values and a targeted M31 ledger before attempting broader global cancellation. Keep source-match checks, native claimed-sum verification, and original global zero-sum assertion. The exact Shinigami native proof and BitVM3 application/settlement layer remain unverified.
+
 ## S3L result: local LogUp claim agrees
 
 The source-pinned `range_check_11` local trace audit [passed](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42760962243): the exact signed QM31 sum of its reconstructed row relations **matched** the native `range_check_11` interaction claim. Its 2,048 rows yielded 959 nonzero distinct tuples. This local equality narrows the global mismatch without clearing it. The native Cairo global lookup assertion still failed, with 1.60 GB peak RSS. [S3L.md](S3L.md) and [S3L_RESULTS.json](S3L_RESULTS.json) record all measurements.

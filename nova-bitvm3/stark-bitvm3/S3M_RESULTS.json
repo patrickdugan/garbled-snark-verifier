@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "stage": "S3m source-captured verify_bitwise_xor_8 local LogUp audit",
+  "code_commit": "759bd19d3d06b7cef57abaf2e9e8d26cdfd65a7b",
+  "trial_commit": "700ee1067dd5175ff20bdcb2a9466b85764a73c3",
+  "run_id": 42769770190,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42769770190",
+  "upstream": {
+    "stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+    "stwo": "aeceb74c"
+  },
+  "frozen_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "source_capture": {
+    "preprocessed": "source-pinned PreProcessedTrace original canonical rows",
+    "base": "exact two base columns from CairoClaimGenerator.write_trace before unchanged tree_builder.extend_evals",
+    "source_row_domain": "CanonicCoset::new(16)",
+    "source_row_count": 65536,
+    "columns_preprocessed": 3,
+    "columns_base": 2,
+    "patch_sha256": "6d33e0ee4416eaaf9cc6d440ad420a805b6496e3602739f8b01720e413db7dba"
+  },
+  "diagnostic": {
+    "native_proof_verified": false,
+    "original_global_lookup_assertion_failed": true,
+    "original_global_residual_qm31": [
+      1866027004,
+      1908263159,
+      1713629672,
+      1017174456
+    ],
+    "component": "verify_bitwise_xor_8",
+    "source_relation_entries": 131072,
+    "claimed_logup_qm31": [
+      2105135349,
+      1091656546,
+      1373784603,
+      2082926218
+    ],
+    "recomputed_logup_qm31": [
+      2105135349,
+      1091656546,
+      1373784603,
+      2082926218
+    ],
+    "claimed_sum_matches": true,
+    "nonzero_distinct_local_relation_tuples": 1,
+    "remaining_local_tuple": {
+      "relation": "CommonLookupElements",
+      "canonical_trimmed_values": [
+        112558620
+      ],
+      "multiplicity_mod_m31": 2147479551,
+      "signed_representative": -4096
+    },
+    "relation_debug_output_truncated": false,
+    "elapsed_seconds": 19.015,
+    "peak_rss_bytes": 1604800512,
+    "peak_vms_bytes": 1781555200,
+    "rss_budget_bytes": 4294967296,
+    "returncode": 101
+  },
+  "routine_ci": {
+    "components": "passed",
+    "tiny_garbling": "passed",
+    "upstream_conformance": "passed",
+    "bounded_diagnostic": "passed on expected native proof rejection"
+  },
+  "artifact": {
+    "id": 13741980559,
+    "zip_sha256": "c7eeb14418aba3b005f6d4c4030b35577ad6d22090cbab5f579545f8e0cb40ed",
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42769770190/artifacts/13741980559"
+  },
+  "counterpart_sources": [
+    "stwo_cairo_prover/crates/prover/src/witness/components/triple_xor_32.rs",
+    "stwo_cairo_prover/crates/prover/src/witness/components/bitwise_builtin.rs",
+    "stwo_cairo_prover/crates/prover/src/witness/components/blake_g.rs",
+    "stwo_cairo_prover/crates/prover/src/witness/components/blake_compress_opcode.rs"
+  ],
+  "interpretation": "XOR8's own LogUp claim matches the upstream native source relation; one trimmed zero-input tuple contributes -4096 modulo M31 locally. Cross-component cancellation remains untested. Original Cairo STARK proof remains rejected.",
+  "security": {
+    "full_shinigami_stark_verified": false,
+    "garbled_shinigami_verified": false,
+    "bitcoin_dispute_enforceable": false,
+    "ark_utxoref_authorized": false
+  }
+}
