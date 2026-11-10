@@ -11,3 +11,13 @@ Routine CI runs static Python checks of the instrumentation and its parser. The 
 The logical next step is to compare the reported contributions with a source-pinned interaction relation audit, isolate the unmatched component or public-memory term, then make a **separate** producer-side fix with native verification as its acceptance gate. A mismatch between the Scarb 2.18 execution input and this Stwo-Cairo producer is another hypothesis to test; the present logs do not determine the cause.
 
 The S2 verifier remains a separate, valid test-only example. Shinigami proof support still needs successful native Cairo proving, program/public-output binding, a matching Boolean verifier revision, and adversarial settlement tests.
+
+## Measured diagnostic result
+
+The [bounded run 42744991308](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42744991308) completed every CI job. The diagnostic job itself passed because it correctly observed the **original failed assertion**, reconstructed the native total from the component sums and kept the proof-status flags false. It did not produce or verify a Cairo proof.
+
+The pinned source inventory has 66 interaction components; 37 were present in this execution. The native total was `(1866027004 + 1908263159i) + (1713629672 + 1017174456i)u`, including the public-memory contribution `(559615079 + 1208624373i) + (2076115172 + 2076164551i)u`. The QM31 diagnostic reconciled modulo M31. The original assertion exited with code 101 after **17.713 seconds**, at **1,232,371,712 bytes peak RSS** and **1,316,700,160 bytes peak virtual size**.
+
+This component-level sum inventory is necessary evidence but does not identify a unique faulty relation. Each claim may contribute to multiple relations. Upstream instrumentation was applied ephemerally, with source and patch SHA-256 stored in the [Actions artifact](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42744991308/artifacts/13730548693). The ZIP has SHA-256 `7d5b83602054c0ff9009044dc10298a40e1ef3fcf1dc029e9df93d1ddbdeb18a`.
+
+The next controlled hypothesis is `canonical_without_pedersen` with a 25-log sequence range and 26-log lifting. The saved execution does not use the Pedersen builtin. The pinned upstream source explicitly supports that preprocessing variant; it uses 73,338,480 cells versus 10,161,776 in `canonical_small`. A separate 4 GiB RSS-limited run will determine whether shortening the sequence table caused this residual.
