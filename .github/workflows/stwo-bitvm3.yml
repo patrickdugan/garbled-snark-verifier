@@ -39,6 +39,10 @@ on:
         description: 'One bounded native Cairo proof with full sequence range, no Pedersen table'
         type: boolean
         default: false
+      s3_relation_audit:
+        description: 'One bounded relation-tuple diagnostic on frozen canonical_small execution'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -371,8 +375,8 @@ jobs:
     # Reduced preprocessed table (10.2m vs 543m cells) and smaller FFT lifting.
     # Only one explicit proof is allowed; routine CI stays proof-free.
     if: >-
-      (github.event_name == 'workflow_dispatch' && (inputs.s3_small_profile || inputs.s3_lookup_diag || inputs.s3_no_pedersen_profile)) ||
-      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[s3-small-profile]') || contains(github.event.head_commit.message, '[s3-lookup]') || contains(github.event.head_commit.message, '[s3-no-pedersen]')))
+      (github.event_name == 'workflow_dispatch' && (inputs.s3_small_profile || inputs.s3_lookup_diag || inputs.s3_no_pedersen_profile || inputs.s3_relation_audit)) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[s3-small-profile]') || contains(github.event.head_commit.message, '[s3-lookup]') || contains(github.event.head_commit.message, '[s3-no-pedersen]') || contains(github.event.head_commit.message, '[s3-relations]')))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -383,6 +387,7 @@ jobs:
       RUST_MIN_STACK: '16777216'
       S3_LOOKUP_DIAG: ${{ (github.event_name == 'workflow_dispatch' && inputs.s3_lookup_diag) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-lookup]')) }}
       S3_NO_PEDERSEN: ${{ (github.event_name == 'workflow_dispatch' && inputs.s3_no_pedersen_profile) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-no-pedersen]')) }}
+      S3_RELATION_AUDIT: ${{ (github.event_name == 'workflow_dispatch' && inputs.s3_relation_audit) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[s3-relations]')) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -408,6 +413,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$S3_RELATION_AUDIT" == "true" && ( "$S3_NO_PEDERSEN" == "true" || "$S3_LOOKUP_DIAG" == "true" ) ]]; then
+            echo "Select exactly one source-level diagnostic"; exit 1
+          fi
           if [[ "$S3_NO_PEDERSEN" == "true" ]]; then
             python3 tools/check_no_pedersen_profile.py --input out/frozen/standalone-prover-input.json.gz --upstream vendor/stwo-cairo | tee out/no-pedersen-preflight.json
           else
@@ -416,10 +424,15 @@ jobs:
           if [[ "$S3_LOOKUP_DIAG" == "true" ]]; then
             python3 tools/instrument_lookup.py --upstream vendor/stwo-cairo --output out/small-profile-lookup.patch | tee out/small-profile-instrument.json
           fi
+          feature_args=()
+          if [[ "$S3_RELATION_AUDIT" == "true" ]]; then
+            python3 tools/instrument_relations.py --upstream vendor/stwo-cairo --output out/small-profile-relations.patch | tee out/small-profile-relations-instrument.json
+            feature_args=(--features stwo-cairo-prover/relation-tracker)
+          fi
           timeout --kill-after=5s 600s cargo +nightly-2025-06-23 build --locked \
             --profile witness-opt-1 \
             --manifest-path vendor/stwo-cairo/stwo_cairo_prover/Cargo.toml \
-            -p stwo-cairo-dev-utils --bin prove 2>&1 | tee out/small-profile-build.txt
+            -p stwo-cairo-dev-utils --bin prove "${feature_args[@]}" 2>&1 | tee out/small-profile-build.txt
       - name: One native STARK using pinned profile and 4 GiB sampled RSS
         working-directory: nova-bitvm3/stark-bitvm3/s3-shinigami
         shell: bash
@@ -427,6 +440,15 @@ jobs:
           set -euo pipefail
           if [[ "$S3_NO_PEDERSEN" == "true" ]]; then
             python3 tools/prove_no_pedersen.py --prove-no-pedersen-once --rss-mib 4096 --timeout-seconds 120
+          elif [[ "$S3_RELATION_AUDIT" == "true" ]]; then
+            set +e
+            python3 tools/prove_low_memory.py --prove-small-once --rss-mib 4096 --timeout-seconds 120
+            status=$?
+            set -e
+            if [[ "$status" -eq 0 ]]; then
+              echo "Unexpected proof success during diagnostic; require manual verification"; exit 1
+            fi
+            python3 tools/summarize_relations.py --log out/small-profile-proving.txt --report out/small-profile-report.json --output out/small-profile-relations-summary.json
           elif [[ "$S3_LOOKUP_DIAG" == "true" ]]; then
             set +e
             python3 tools/prove_low_memory.py --prove-small-once --rss-mib 4096 --timeout-seconds 120
