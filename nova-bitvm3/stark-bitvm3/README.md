@@ -1,5 +1,9 @@
 # Direct Stwo-to-Boolean prototype
 
+## S3h tracker row-domain and memory diagnostics
+
+The upstream relation tracker initially panicked after reconstructing constant columns at a reduced polynomial domain. An ephemeral source-pinned row-domain correction passed lightweight checks. The follow-up full audit exceeded the 4 GiB sampled RSS limit before outputting tuples; the watchdog stopped the trial. The pinned native lookup residual remains under investigation. See [S3H.md](S3H.md) and [S3H_RESULTS.json](S3H_RESULTS.json).
+
 ## S3f/S3g lookup and preprocessing experiments
 
 [Run 42744991308](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42744991308) measured the nonzero lookup-sum failure under `canonical_small`: 37 present interaction components reproduced the exact native residual, and the original assertion rejected the proof. The source-pinned profile consumed 1.23 GiB sampled RSS at failure. [S3F.md](S3F.md) and [S3F_RESULTS.json](S3F_RESULTS.json) preserve the diagnostic evidence.

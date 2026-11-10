@@ -1,5 +1,11 @@
 # Continuation after S2 and S3a
 
+## Updated S3h blocker: tracker memory
+
+The [S3h relation audit](S3H.md) exposed an upstream diagnostic-only row-domain indexing bug, then crossed the 4 GiB RSS guard when that bug was corrected. Its last run reached `S3_RELATIONS_BEGIN` but emitted no relation tuples before the watchdog stopped it at 4.30 GB RSS. The source-pinned initial lookup residual remains unchanged, and native Cairo proof generation has not completed.
+
+The next proof-free engineering target is a **streaming relation-balance collector**: limit one component/relation family at a time, avoid retaining the entire reconstructed trace and vector of all `RelationTrackerEntry` values, and account for duplicates and multiplicities exactly modulo M31. Compare the streamed totals with the 37-component native QM31 residual, then rerun only one resource-capped diagnostic after local unit tests. Preserve unmodified native prover and verifier checks as the final acceptance gate. Do not raise the GitHub runner RSS cap or start a full proof while this evidence is incomplete.
+
 ## Updated blocker: S3f/S3g (November 10, 2026)
 
 The native lookup failure under `canonical_small` is now localized to a nonzero sum of 37 present component contributions plus public memory; the exact QM31 residual and source patch are recorded in [S3F_RESULTS.json](S3F_RESULTS.json). The native assertion remains the acceptance gate. Repeating the experiment with `canonical_without_pedersen` consumed the 4 GiB RSS budget **during preprocessing**, before the lookup check (see [S3G_RESULTS.json](S3G_RESULTS.json)). This larger variant cannot be evaluated within the current cap.

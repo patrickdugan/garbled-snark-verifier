@@ -1,0 +1,45 @@
+{
+  "stage": "S3h relation tracker correction: bounded full audit exceeded 4 GiB RSS",
+  "source_pinned_upstream": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+  "source_pinned_stwo": "aeceb74c",
+  "earlier_panic": {
+    "run_id": 42751015710,
+    "commit": "33495264d345e05b3a20d00cfe132dba54c1b4da",
+    "failure": "relation_tracker.rs:95:27, len 2 indexed at 2",
+    "peak_rss_bytes": 2070794240,
+    "elapsed_seconds": 25.981
+  },
+  "tested_commit": "213ffcf400527a33144ff0f19817ede1472a2215",
+  "run_id": 42752306358,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42752306358",
+  "status": "rss_budget_exceeded_during_relation_tracking",
+  "relation_tracker_started": true,
+  "relation_tracker_text_emitted": false,
+  "native_lookup_assertion_checked": false,
+  "native_proof_verified": false,
+  "timing_and_memory": {
+    "elapsed_seconds": 45.65,
+    "peak_rss_bytes": 4301787136,
+    "peak_vms_bytes": 5012258816,
+    "returncode": -15,
+    "rss_limit_bytes": 4294967296,
+    "timeout_seconds": 120
+  },
+  "fix_scope": "ephemeral diagnostic: re-evaluate reduced-degree polynomials on the original trace evaluation domain",
+  "normal_ci": {
+    "components": "success",
+    "upstream_conformance": "success",
+    "tiny_garbling": "success"
+  },
+  "artifact": {
+    "id": 13733469602,
+    "zip_sha256": "9245f6e70da568df1688c80d6fe889d115a9bbb305024ac8c497e68366b40aa1",
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42752306358/artifacts/13733469602"
+  },
+  "next": "bounded streaming relation multiplicity audit avoiding full trace and all-entry retention",
+  "scope": {
+    "full_shinigami_stark": false,
+    "bitvm3_settlement": false,
+    "ark_utxoref_authorization": false
+  }
+}
