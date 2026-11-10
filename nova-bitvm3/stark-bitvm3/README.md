@@ -1,5 +1,9 @@
 # Direct Stwo-to-Boolean prototype
 
+## S3n producer attribution: 4,096 XOR8 zero inputs from bitwise_builtin
+
+The bounded native [S3n diagnostic](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42772759725) attributed every zero-input request for XOR8 tag 112558620 to `bitwise_builtin`, accounting for its local `−4096` table multiplicity. Source-pinned AIR declares one positive XOR8 lookup per 4,096-row builtin instance. The original global Cairo LogUp assertion still rejects the Shinigami proof. All four CI jobs passed, with 1.61 GB peak RSS and 19.227 seconds of native diagnostic execution. See [S3N.md](S3N.md) and [S3N_RESULTS.json](S3N_RESULTS.json).
+
 ## Latest S3m checkpoint: XOR8 component agreement
 
 The source-captured `verify_bitwise_xor_8` native diagnostic matched its claimed QM31 LogUp value across **131,072 source-row relation entries**, with 1.60 GB peak RSS and 19.015 seconds of native runtime. The local M31 relation cleanup leaves a single zero-input tuple of multiplicity −4096 at tag `112558620`. The original global LogUp assertion still rejects the Shinigami proof. All four jobs passed in [run 42769770190](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42769770190). See [S3M.md](S3M.md) and [S3M_RESULTS.json](S3M_RESULTS.json).

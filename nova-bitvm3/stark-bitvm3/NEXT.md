@@ -1,5 +1,11 @@
 # Continuation after S2 and S3a
 
+## S3n: XOR8 zero-tuple routing accounted for
+
+The [bounded native source audit](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42772759725) reports that **all 4,096** zero-input calls for XOR8 relation tag 112558620 originate from the `bitwise_builtin` producer, with zero contributions from the other four source groups. The table's single residual tuple is `−4096` and is thus reconciled at the input-routing level. The frozen bitwise-builtin segment contains exactly 4,096 instances and its pinned AIR declares one positive XOR8 relation per row. The global Cairo LogUp assertion remains nonzero and rejects the native proof. See [S3N.md](S3N.md) and [S3N_RESULTS.json](S3N_RESULTS.json).
+
+Next test the **positive caller AIR tuples** directly through a bounded native `bitwise_builtin` source-row audit. Once confirmed, the XOR8 zero tuple can be excluded from likely global mismatches; investigate other nonzero relation tuples and the public-memory terms with source-matched per-component accounting. Keep the full Shinigami/Cairo proof and BitVM3 settlement flags false until original native prover/verifier acceptance succeeds.
+
 ## S3m completed: XOR8 source rows agree with native claim
 
 [Run 42769770190](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42769770190) successfully compared `verify_bitwise_xor_8` source rows with its pinned native interaction claim. Recomputed QM31 LogUp matched all four limbs from **131,072** relation entries. The local signed multiplicity ledger leaves one tuple `[112558620] -> -4096` (mod M31). This is a component-local result; the global lookup assertion still fails. Peak sampled RSS **1.60 GB**, native runtime **19.015 seconds**. All four CI jobs passed; [S3M.md](S3M.md) and [S3M_RESULTS.json](S3M_RESULTS.json) preserve the evidence.

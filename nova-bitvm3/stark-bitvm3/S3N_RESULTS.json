@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "stage": "S3n native source-attributed XOR8 zero-input callsite audit",
+  "test_code_commit": "1e6a695b7e78df6e0fdb9266266be4b1bd9a14c8",
+  "trial_commit": "3aa9be90254c41c1eb4e82952498b107996fe0d1",
+  "run_id": 42772759725,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42772759725",
+  "source_pins": {
+    "stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+    "stwo": "aeceb74c"
+  },
+  "frozen_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "input_bitwise_builtin_segment": {
+    "begin_addr": 357832,
+    "stop_ptr": 378312,
+    "memory_cells_per_instance": 5,
+    "total_instances": 4096,
+    "log_size": 12
+  },
+  "pinned_air_source": {
+    "module": "stwo_cairo_prover/crates/cairo-air/src/components/bitwise_builtin.rs",
+    "xor8_relations_per_row": 1,
+    "subroutine": "BitwiseXorNumBits8::evaluate",
+    "subroutine_module": "stwo_cairo_prover/crates/cairo-air/src/components/subroutines/bitwise_xor_num_bits_8.rs",
+    "subroutine_relation_tag": 112558620,
+    "subroutine_signed_multiplicity_per_row": 1,
+    "validation_scope": "pinned static source crosswalk; caller AIR not directly executed in this diagnostic"
+  },
+  "native_diagnostic": {
+    "source_counterparties": {
+      "triple_xor_32": {
+        "relation0": 0,
+        "relation1": 0
+      },
+      "blake_g": {
+        "relation0": 0,
+        "relation1": 0
+      },
+      "blake_compress_opcode": {
+        "relation0": 0,
+        "relation1": 0
+      },
+      "bitwise_builtin": {
+        "relation0": 4096,
+        "relation1": 0
+      },
+      "other": {
+        "relation0": 0,
+        "relation1": 0
+      }
+    },
+    "relation_tag0": 112558620,
+    "relation_tag1": 521092554,
+    "tuple": [
+      112558620,
+      0,
+      0,
+      0
+    ],
+    "local_xor8_signed_table_multiplicity": -4096,
+    "source_positive_requests": 4096,
+    "source_requests_account_for_table_supply": true,
+    "all_source_calls_attributed": true,
+    "actual_caller_air_relation_values_checked": false,
+    "global_relation_balance_verified": false,
+    "native_proof_verified": false,
+    "global_native_lookup_assertion_failed": true,
+    "global_residual_qm31": [
+      1866027004,
+      1908263159,
+      1713629672,
+      1017174456
+    ],
+    "xor8_source_logup_claim_matched": true,
+    "elapsed_seconds": 19.227,
+    "peak_rss_bytes": 1606266880,
+    "rss_limit_bytes": 4294967296,
+    "native_exit_code": 101
+  },
+  "ci": {
+    "components": "success",
+    "upstream_conformance": "success",
+    "tiny_garbling": "success",
+    "native_attribution": "success_on_expected_proof_rejection"
+  },
+  "artifact": {
+    "id": 13742429158,
+    "zip_sha256": "9130abaa246ecc9b52564fb11d8384b284a74c9d3b05539d55d373e38a785163",
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42772759725/artifacts/13742429158"
+  },
+  "next_gate": "Evaluate the source-pinned bitwise_builtin caller AIR relation tuples against the XOR8 table zero tuple. Then return to nonzero global QM31 residual with targeted component-local audits.",
+  "authorization": {
+    "full_shinigami_stark": false,
+    "bitvm3_dispute_protocol": false,
+    "ark_utxoref_state": false
+  }
+}
