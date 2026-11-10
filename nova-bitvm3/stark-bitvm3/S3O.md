@@ -28,10 +28,59 @@ Six deterministic mutations are applied to the real rows in the native run and, 
 
 ## CI and safety envelope
 
-Routine CI runs only the Python source-shape, parser and mutation tests (`test_xor8_caller_air.py`) with the existing S3 suite, plus the existing circuit and garbling jobs. Only a separate `[s3-caller]` commit marker, or workflow input `s3_xor8_caller_air=true`, runs the native diagnostic against the frozen standalone CSV input, hash-pinned as before. It is limited to 4 GiB sampled process-tree RSS, 120 seconds and the existing 15-minute job cap. It must reach the original global lookup assertion and reject the native proof (exit 101). No Nova, SP1 or CUDA work runs, and Cairo proof verification stays false.
+Routine CI runs only the Python source-shape, parser and mutation tests (`test_xor8_caller_air.py`) with the existing S3 suite, plus the existing circuit and garbling jobs. Only a separate commit marker (`s3-caller` in square brackets), or workflow input `s3_xor8_caller_air=true`, runs the native diagnostic against the frozen standalone CSV input, hash-pinned as before. It is limited to 4 GiB sampled process-tree RSS, 120 seconds and the existing 15-minute job cap. It must reach the original global lookup assertion and reject the native proof (exit 101). No Nova, SP1 or CUDA work runs, and Cairo proof verification stays false.
 
 The result is published as run annotations as well as an artifact, so it can be read without downloading the artifact.
 
+## Measured result: the XOR8 zero tuple cancels exactly
+
+The native diagnostic ran once in CI on the frozen standalone input: [run 42834108025](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42834108025), job `s3-small-profile` (129891592008), code commit [ffe0596](https://github.com/patrickdugan/garbled-snark-verifier/commit/ffe059656e781328d55ac8232a581fd0bdd855bb). The three routine jobs in the same run passed. The `[s3-caller]` marker was in that commit's message, so the diagnostic started on the first push. That is the one CI native run of this stage.
+
+| Quantity | Value |
+|---|---|
+| Source rows captured | 4,096 (log size 12), 89 base columns plus the `seq_12` column, digest `6ea9ccb9974ec6bdaf50e14cdc7f9d826117d848f058a3d219682660fdf72f83` (Blake2s) |
+| Entries from the pinned AIR | 155,648 = 4,096 x 38; every row has exactly one XOR8 entry |
+| Caller XOR8 entries | 4,096, every one `[112558620,0,0,0]` with multiplicity +1; signed total **+4,096** |
+| Table XOR8 entries | 131,072, of which one is nonzero: `[112558620,0,0,0]` with multiplicity -4,096 (2147479551 mod M31); signed total **-4,096** |
+| Signed ledger (mod M31) | caller + table = 0 for every tuple; **0 nonzero tuples** |
+| QM31 ledger under the native challenge | caller `(42348298, 1055827101, 773699044, 64557429)` + table `(2105135349, 1091656546, 1373784603, 2082926218)` = `(0, 0, 0, 0)` |
+| Negative controls (nonzero tuples left) | missing caller entry 1, duplicated caller entry 1, altered caller tuple 2, altered caller multiplicity 1, missing table entry 1, duplicated table entry 1; the parser recomputed every count from the printed groups |
+| Component LogUp vs native claim | recomputed = claimed = `(1876312143, 249812616, 1375950257, 238553224)`; the four relation families add up to it exactly |
+| Native run | 17.903 s, peak sampled RSS 1,639,202,816 bytes (1.64 GB) under the 4,294,967,296-byte cap, peak VMS 1,829,367,808 bytes, exit code 101 |
+| Native global assertion | still fails with `(1866027004 + 1908263159i) + (1713629672 + 1017174456i)u`; no Cairo proof produced or verified |
+
+The XOR8 table claim of S3m, `(2105135349, 1091656546, 1373784603, 2082926218)`, is the table half of the QM31 ledger, so the cancellation uses the same frozen transcript as S3m and S3n.
+
+### What bitwise_builtin contributes to the other families
+
+The same evaluation accounts for the rest of the component's claim. These families are **not** balanced by anything in this experiment; they are the supply side's to cancel.
+
+| Relation tag | Name | Entries (+1 each) | Distinct tuples |
+|---|---|---|---|
+| 1444891767 | `MemoryAddressToId` | 20,480 | 20,480 (one per builtin-segment cell, 357,832 to 378,311) |
+| 1662111297 | `MemoryIdToBig` | 20,480 | 9,431 |
+| 95781001 | `VerifyBitwiseXor_9` | 110,592 (27 per row) | 8,481 |
+| 112558620 | `VerifyBitwiseXor_8` | 4,096 | 1 |
+
+### Interpretation
+
+The positive XOR8 entries that the pinned AIR derives from the 4,096 original `bitwise_builtin` rows are exactly 4,096 copies of `[112558620,0,0,0]`, and they cancel the table's -4,096 both as an M31 multiplicity ledger and as a QM31 sum. Together with S3n (no other producer calls the table with a zero input, and relation index 1 is unused), the XOR8 relation family is balanced, so it contributes nothing to the global residual. The caller component's own LogUp sum equals its native interaction claim, so its AIR evaluation under the native challenge is consistent with the claim the prover committed to. Three components now agree locally with their native claims: `range_check_11` (S3l), `verify_bitwise_xor_8` (S3m) and `bitwise_builtin` (S3o).
+
+The global lookup assertion still fails and no proof exists. The remaining residual lies in other relation families, in the 34 other present components, or in public memory.
+
+## Next: where the residual can still hide
+
+The remaining unbalanced terms, ranked by what S3o measured:
+
+1. **The memory relations (`MemoryAddressToId`, `MemoryIdToBig`) with public memory.** Every builtin and opcode component adds uses of these two tags, and `bitwise_builtin` alone adds 40,960 of them. Public memory (with the initial and final `Opcodes` state) is the only part of the global sum that no component's AIR produces, so a mismatch in how the adapter emitted it, or in how the producer counted its uses in the memory tables' multiplicities, would not show up in any per-component check. The next experiment is a per-tuple ledger for these two tags across **all** active components plus the public-memory entries, against the memory tables' yields.
+2. **`VerifyBitwiseXor_9`.** It is the largest family of this component (110,592 entries) and has its own table, with a 2^18-row preprocessed trace. It reuses the S3m/S3o technique unchanged but is the larger of the two table audits.
+
+The enabling change is the capture boundary S3o just validated. S3h and S3j crossed 4 GiB because they interpolated and re-evaluated whole trees. Capturing every component's base evaluations where they enter `TreeBuilder::extend_evals` (one place, instead of one patch per component) and evaluating each component on its own, with its preprocessed columns generated on demand, keeps only the tuples of the two memory tags in a streaming ledger. That is a design to measure, not a result: its memory use is unmeasured.
+
 ## Local reproduction note
 
-Regenerating the standalone prover input locally (Scarb 2.18.0, the pinned program, executable SHA-256 `a9bdc409...bef3`) gives the same 9,624,654 bytes but not the frozen SHA-256: three executions produced two different hashes, and the canonical (key-sorted) JSON hashes differ as well, so the execution output is not serialized deterministically. The Fiat-Shamir transcript, and therefore the numeric challenge-dependent values (the residual and the XOR8 claim), depend on that content. Challenge-dependent numbers are therefore taken only from the CI run on the frozen artifact. A local run is useful for shape and structure only.
+The standalone prover input regenerated locally (Scarb 2.18.0, the pinned program, executable SHA-256 `a9bdc409...bef3`) is the same size, 9,624,654 bytes, but not byte-identical to the frozen file. Three executions gave two different SHA-256 values, and the key-sorted canonical JSON hashes also differ, so the execution output is not serialized in a stable order. Despite that, a local run of the same patch (WSL, same pins, 23.4 s, 1.64 GB RSS) printed the same source digest, the same component claim, the same XOR8 claim and the same global residual as the CI run, so the prover's trace does not depend on that ordering. The CI run on the frozen artifact is the recorded evidence; the local run is a cross-check only, and the log block it printed is kept as the fixture `tools/fixtures/s3o-caller-block.txt`.
+
+## Scope
+
+This does not produce a Cairo STARK proof, a Shinigami execution receipt that anything verifies, a BitVM3 dispute, or any Ark or UTXORef state. It shows one relation family of one component pair balanced. Full proof verification stays false until the original native verifier accepts a complete proof.

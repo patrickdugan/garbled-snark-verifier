@@ -1,5 +1,11 @@
 # Continuation after S2 and S3a
 
+## S3o: XOR8 zero tuple cancels at the caller AIR
+
+[Run 42834108025](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42834108025) evaluated the pinned `bitwise_builtin` AIR, through upstream's unmodified relation evaluator, on its 4,096 original base rows. All 4,096 positive XOR8 entries are `[112558620,0,0,0]` (+4,096); the table side is `-4096`. The signed M31 ledger and the QM31 sum under the native challenge are both zero, six negative controls (missing, duplicated or altered entries) are all detected, and the component's full LogUp sum equals its native claim. Native run: 17.903 s, 1.64 GB peak RSS, exit 101. The global lookup assertion still fails with the same residual and no proof exists. See [S3O.md](S3O.md) and [S3O_RESULTS.json](S3O_RESULTS.json).
+
+The XOR8 family is balanced and out of the residual. Next, extend the same source-capture technique to a per-tuple ledger for the **`MemoryAddressToId` and `MemoryIdToBig` relations across all active components plus public memory**, against the memory tables' yields. Capture every component's base evaluations once, where they enter `TreeBuilder::extend_evals`, evaluate components one at a time, and keep only the tuples of those two tags. `VerifyBitwiseXor_9` (110,592 entries from this component, a 2^18-row table) is the second target. Keep the original lookup assertion, signed multiplicities and the native verifier as acceptance conditions.
+
 ## S3n: XOR8 zero-tuple routing accounted for
 
 The [bounded native source audit](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42772759725) reports that **all 4,096** zero-input calls for XOR8 relation tag 112558620 originate from the `bitwise_builtin` producer, with zero contributions from the other four source groups. The table's single residual tuple is `−4096` and is thus reconciled at the input-routing level. The frozen bitwise-builtin segment contains exactly 4,096 instances and its pinned AIR declares one positive XOR8 relation per row. The global Cairo LogUp assertion remains nonzero and rejects the native proof. See [S3N.md](S3N.md) and [S3N_RESULTS.json](S3N_RESULTS.json).

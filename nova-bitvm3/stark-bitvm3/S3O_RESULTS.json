@@ -1,0 +1,240 @@
+{
+  "schema": 1,
+  "stage": "S3o bitwise_builtin caller-AIR XOR8 zero-tuple cancellation",
+  "code_commit": "ffe059656e781328d55ac8232a581fd0bdd855bb",
+  "parser_pin_commit": "5d302ca303d6e353c91b8fe91a7f6e1ddcab655b",
+  "base_head": "1dacceb412a250ab066ce2c0cc624dbb5f77933c",
+  "run_id": 42834108025,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42834108025",
+  "job": {
+    "name": "s3-small-profile",
+    "id": 129891592008
+  },
+  "source_pins": {
+    "stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+    "stwo": "aeceb74c"
+  },
+  "frozen_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "patch": {
+    "patch_sha256": "4ba0803c1b5d664cb786bbda29fd32db7eef52995f3daeca6c37cad6ddfaeea9",
+    "rederived_locally_equal": true,
+    "files": [
+      {
+        "path": "stwo_cairo_prover/crates/prover/src/prover.rs",
+        "before_sha256": "8d10febc56e2438e9ca48c59b1e82dd50bcc5f23eb06d0846fe3c90d83368112",
+        "diagnostic_sha256": "2aebc0b548d1d38b91cd6b3c2777f8202d9012cf0b527047885fc69f8141ec32"
+      },
+      {
+        "path": "stwo_cairo_prover/crates/prover/src/debug_tools/relation_tracker.rs",
+        "before_sha256": "802e78260328b75cee9e56ea9ee54d69c85615debec9a17322f5274fb80f4949",
+        "diagnostic_sha256": "652330edf34d74df1a39352ef74909f5c87433c9b8a53e1675d6f4f88a55036a"
+      },
+      {
+        "path": "stwo_cairo_prover/crates/prover/src/witness/cairo_claim_generator.rs",
+        "before_sha256": "d80d34356d81a0f65ffd94596d572a3c40b569d5e7994905aece7e1b7afdfe0d",
+        "diagnostic_sha256": "0cdce2002d892c96edb8e6fc2d9144b808ef920a647569634cdb9d42db1bc7de"
+      }
+    ]
+  },
+  "caller_air": {
+    "component": "bitwise_builtin",
+    "evaluator": "upstream stwo_constraint_framework::relation_tracker::add_to_relation_entries, unmodified",
+    "source_capture": "89 base columns at CairoClaimGenerator.write_trace before the unchanged tree_builder.extend_evals; canonical CanonicCoset(12) domain, bit-reversed order; preprocessed seq_12 from the same PreProcessedTrace object the native commitment used",
+    "rows": 4096,
+    "base_columns": 89,
+    "preprocessed_columns": 1,
+    "source_digest_blake2s": "6ea9ccb9974ec6bdaf50e14cdc7f9d826117d848f058a3d219682660fdf72f83",
+    "relation_entries": 155648,
+    "entries_per_row": 38,
+    "rows_with_exactly_one_xor8_entry": 4096,
+    "families": {
+      "1444891767": {
+        "name": "MemoryAddressToId",
+        "entries": 20480,
+        "distinct_tuples": 20480,
+        "mult_sum_mod_p": 20480,
+        "qm31": [
+          1847391689,
+          2083409953,
+          874710954,
+          1401549321
+        ]
+      },
+      "1662111297": {
+        "name": "MemoryIdToBig",
+        "entries": 20480,
+        "distinct_tuples": 9431,
+        "mult_sum_mod_p": 20480,
+        "qm31": [
+          2036516644,
+          473483470,
+          698331701,
+          461675362
+        ]
+      },
+      "95781001": {
+        "name": "VerifyBitwiseXor_9",
+        "entries": 110592,
+        "distinct_tuples": 8481,
+        "mult_sum_mod_p": 110592,
+        "qm31": [
+          97539159,
+          932059386,
+          1176692205,
+          458254759
+        ]
+      },
+      "112558620": {
+        "name": "VerifyBitwiseXor_8",
+        "entries": 4096,
+        "distinct_tuples": 1,
+        "mult_sum_mod_p": 4096,
+        "qm31": [
+          42348298,
+          1055827101,
+          773699044,
+          64557429
+        ]
+      }
+    },
+    "component_logup_recomputed": [
+      1876312143,
+      249812616,
+      1375950257,
+      238553224
+    ],
+    "component_logup_claimed": [
+      1876312143,
+      249812616,
+      1375950257,
+      238553224
+    ],
+    "component_claim_sum_matches": true,
+    "families_account_for_full_claim": true
+  },
+  "xor8_ledger": {
+    "tuple": [
+      112558620,
+      0,
+      0,
+      0
+    ],
+    "caller_entries": 4096,
+    "caller_tuples": [
+      {
+        "tuple": [
+          112558620,
+          0,
+          0,
+          0
+        ],
+        "multiplicity": 1,
+        "count": 4096
+      }
+    ],
+    "caller_all_zero_tuple": true,
+    "caller_signed_total": 4096,
+    "table_entries": 131072,
+    "table_nonzero_entries": [
+      {
+        "tuple": [
+          112558620,
+          0,
+          0,
+          0
+        ],
+        "multiplicity_mod_m31": 2147479551,
+        "count": 1
+      }
+    ],
+    "table_signed_total": -4096,
+    "net_mod_m31": 0,
+    "ledger_nonzero_tuples": 0,
+    "qm31_caller": [
+      42348298,
+      1055827101,
+      773699044,
+      64557429
+    ],
+    "qm31_table": [
+      2105135349,
+      1091656546,
+      1373784603,
+      2082926218
+    ],
+    "qm31_total": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "negative_controls_nonzero_tuples": {
+      "missing_caller_entry": 1,
+      "duplicated_caller_entry": 1,
+      "altered_caller_tuple": 2,
+      "altered_caller_multiplicity": 1,
+      "missing_table_entry": 1,
+      "duplicated_table_entry": 1
+    }
+  },
+  "native_diagnostic": {
+    "global_native_lookup_assertion_failed": true,
+    "global_residual_qm31": [
+      1866027004,
+      1908263159,
+      1713629672,
+      1017174456
+    ],
+    "native_exit_code": 101,
+    "elapsed_seconds": 17.903,
+    "peak_rss_bytes": 1639202816,
+    "peak_vms_bytes": 1829367808,
+    "rss_limit_bytes": 4294967296,
+    "timeout_seconds": 120,
+    "native_proof_produced": false,
+    "native_proof_verified": false
+  },
+  "local_cross_check": {
+    "environment": "WSL Ubuntu-24.04, same upstream pins, standalone input regenerated with Scarb 2.18.0 (not byte-identical to the frozen file)",
+    "elapsed_seconds": 23.418,
+    "peak_rss_bytes": 1638203392,
+    "identical_to_ci": [
+      "source_digest_blake2s",
+      "component_logup_claimed",
+      "xor8_qm31_table",
+      "global_residual_qm31",
+      "all families",
+      "all ledger values"
+    ],
+    "fixture": "nova-bitvm3/stark-bitvm3/s3-shinigami/tools/fixtures/s3o-caller-block.txt"
+  },
+  "ci": {
+    "components": "success",
+    "upstream_conformance": "success",
+    "tiny_garbling": "success",
+    "native_caller_air": "success_on_expected_proof_rejection",
+    "evidence_annotations": "S3O result, S3O families, S3O resources, S3O patch",
+    "routine_run_on_parser_pin": {
+      "commit": "5d302ca303d6e353c91b8fe91a7f6e1ddcab655b",
+      "run_id": 42835762936,
+      "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42835762936",
+      "components": "success",
+      "upstream_conformance": "success",
+      "tiny_garbling": "success",
+      "native_diagnostic": "not run (no marker)"
+    }
+  },
+  "artifact": {
+    "name": "shinigami-s3-small-ffe059656e781328d55ac8232a581fd0bdd855bb",
+    "zip_digest": "sha256:961f44c83353814aca54aa5b5895adae5911ca565a92c27cfd08b7d7a11643da",
+    "run_artifacts_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42834108025#artifacts"
+  },
+  "xor8_zero_tuple_cancellation_established": true,
+  "next_gate": "Per-tuple MemoryAddressToId and MemoryIdToBig ledger across all active components and public memory against the memory tables' yields, using the source-capture boundary at TreeBuilder::extend_evals; then VerifyBitwiseXor_9.",
+  "authorization": {
+    "full_shinigami_stark": false,
+    "full_global_lookup_balance_verified": false,
+    "bitvm3_dispute_protocol": false,
+    "ark_utxoref_state": false
+  }
+}
