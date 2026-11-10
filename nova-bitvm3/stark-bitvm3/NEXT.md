@@ -1,5 +1,11 @@
 # Continuation after S2 and S3a
 
+## Updated S3j outcome (November 10, 2026)
+
+The reconstruction-pruned relation tracker ([S3J.md](S3J.md)) still crossed **4 GiB RSS** after 39.048 seconds, before producing any tuple summary. The process was stopped by its existing budget; no native proof was generated or verified. Record: [S3J_RESULTS.json](S3J_RESULTS.json). Three routine CI jobs passed, and the S2 test-only proof path remains unchanged.
+
+The next task is source-equivalent, **component-local reconstruction** of only the preprocessed/base columns referenced by the active relation, or a targeted LogUp generator audit. Test trace-domain, bit-reversed ordering and blowup alignment against the pinned native implementation. Keep the original lookup assertion, signed multiplicities, native verification, and receipt binding as acceptance conditions. Hold full-trace reconstruction and higher-memory cloud proving pending a measured design.
+
 ## Updated S3h blocker: tracker memory
 
 The [S3h relation audit](S3H.md) exposed an upstream diagnostic-only row-domain indexing bug, then crossed the 4 GiB RSS guard when that bug was corrected. Its last run reached `S3_RELATIONS_BEGIN` but emitted no relation tuples before the watchdog stopped it at 4.30 GB RSS. The source-pinned initial lookup residual remains unchanged, and native Cairo proof generation has not completed.

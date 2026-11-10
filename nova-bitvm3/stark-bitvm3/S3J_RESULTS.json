@@ -1,0 +1,58 @@
+{
+  "stage": "S3j: trace-tree pruning under bounded native relation audit",
+  "tested_code_commit": "c07c037281b73e9daebd37497060e433de0d542a",
+  "trigger_commit": "0c6be6327efd5477b36f12b8c7b1133fe2c68313",
+  "run_id": 42753720798,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42753720798",
+  "source_pins": {
+    "stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+    "stwo": "aeceb74c"
+  },
+  "frozen_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "profile": "canonical_small",
+  "native_trial": {
+    "status": "rss_budget_exceeded",
+    "proof_verification_complete": false,
+    "native_proof_produced": false,
+    "assertion_reached": false,
+    "diagnostic_marker_emitted": "S3_RELATIONS_BEGIN",
+    "tuple_summary_emitted": false,
+    "elapsed_seconds": 39.048,
+    "peak_rss_bytes": 4299522048,
+    "peak_virtual_bytes": 5312008192,
+    "rss_limit_bytes": 4294967296,
+    "runtime_limit_seconds": 120,
+    "returncode": -15,
+    "kernel_enforced_rss_limit": false
+  },
+  "trace_cell_counts": {
+    "preprocessed": 10161776,
+    "base": 23690176,
+    "interaction": 31786752
+  },
+  "optimization": {
+    "description": "Skip reconstruction of committed interaction-tree values in debug-only relation tracker.",
+    "preprocessed_and_base_reconstruction_unchanged": true,
+    "proof_commitments_unchanged": true,
+    "original_native_lookup_assertion_unchanged": true,
+    "effectiveness": "still exceeded 4 GiB; no tuple inventory"
+  },
+  "routine_ci": {
+    "components": "success",
+    "tiny_garbling": "success",
+    "upstream_conformance": "success"
+  },
+  "artifact": {
+    "id": 13734469104,
+    "zip_sha256": "727889b8824db1a64edc588299a7ec91d2486275b1c9ec2a441755774841b2c7",
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42753720798/artifacts/13734469104"
+  },
+  "next_gate": "Component-local source-evaluation reconstruction or a direct lookup-claim accounting diagnostic with source-matched correctness tests; avoid full-tree reinterpolation under 4 GiB.",
+  "flags": {
+    "native_shinigami_proof_verified": false,
+    "s2_full_stark_test_unchanged": true,
+    "ark_utxoref_application_verified": false,
+    "bitcoin_settlement_verified": false,
+    "nova_sp1_cuda_proving_launched": false
+  }
+}

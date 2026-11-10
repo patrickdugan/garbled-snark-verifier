@@ -1,5 +1,9 @@
 # Direct Stwo-to-Boolean prototype
 
+## Latest relation-audit result: S3j
+
+[Run 42753720798](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42753720798) tested a source-pinned diagnostic that skipped reconstructing the unused interaction tree. It still exceeded **4 GiB sampled RSS** before reporting unmatched tuples. The native proof and lookup assertion remained incomplete; all three routine CI jobs passed. See [S3J.md](S3J.md) and [S3J_RESULTS.json](S3J_RESULTS.json). Further experiments target component-local trace reconstruction.
+
 ## S3h tracker row-domain and memory diagnostics
 
 The upstream relation tracker initially panicked after reconstructing constant columns at a reduced polynomial domain. An ephemeral source-pinned row-domain correction passed lightweight checks. The follow-up full audit exceeded the 4 GiB sampled RSS limit before outputting tuples; the watchdog stopped the trial. The pinned native lookup residual remains under investigation. See [S3H.md](S3H.md) and [S3H_RESULTS.json](S3H_RESULTS.json).
