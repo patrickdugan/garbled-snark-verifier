@@ -1,5 +1,11 @@
 # Continuation after S2 and S3a
 
+## S3L result: local LogUp claim agrees
+
+The source-pinned `range_check_11` local trace audit [passed](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42760962243): the exact signed QM31 sum of its reconstructed row relations **matched** the native `range_check_11` interaction claim. Its 2,048 rows yielded 959 nonzero distinct tuples. This local equality narrows the global mismatch without clearing it. The native Cairo global lookup assertion still failed, with 1.60 GB peak RSS. [S3L.md](S3L.md) and [S3L_RESULTS.json](S3L_RESULTS.json) record all measurements.
+
+Next use the same bounded technique for another active component, ideally `range_check_12` or a small opcode relation, and compare its reconstructed LogUp sum with the corresponding native claim. Accumulate cross-component tuples only after each local sum agrees; preserve signed multiplicities, source revisions, and unmodified native proof acceptance.
+
 ## Updated S3j outcome (November 10, 2026)
 
 The reconstruction-pruned relation tracker ([S3J.md](S3J.md)) still crossed **4 GiB RSS** after 39.048 seconds, before producing any tuple summary. The process was stopped by its existing budget; no native proof was generated or verified. Record: [S3J_RESULTS.json](S3J_RESULTS.json). Three routine CI jobs passed, and the S2 test-only proof path remains unchanged.

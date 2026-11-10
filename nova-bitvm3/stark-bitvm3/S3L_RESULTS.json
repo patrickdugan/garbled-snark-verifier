@@ -1,0 +1,64 @@
+{
+  "stage": "S3L: source-matched local range_check_11 LogUp claim comparison",
+  "tested_code_commit": "8e178cb9044de1403f54fb680bba8ef84ffb525b",
+  "trigger_commit": "b67a9fba8b5aa49a11d9cff459a370a87a4cac8f",
+  "run_id": 42760962243,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42760962243",
+  "upstream_pins": {
+    "stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+    "stwo": "aeceb74c"
+  },
+  "frozen_prover_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "native_diagnostic": {
+    "selected_component": "range_check_11",
+    "component_trace_rows": 2048,
+    "preprocessed_columns": 1,
+    "base_columns": 1,
+    "raw_relation_entries": 2048,
+    "nonzero_distinct_local_tuples": 959,
+    "total_negative_multiplicity": 51200,
+    "reconstructed_logup_qm31": [
+      1940708650,
+      312008446,
+      1727873078,
+      211651567
+    ],
+    "claimed_logup_qm31": [
+      1940708650,
+      312008446,
+      1727873078,
+      211651567
+    ],
+    "component_claim_sum_matches": true,
+    "global_residual_qm31": [
+      1866027004,
+      1908263159,
+      1713629672,
+      1017174456
+    ],
+    "original_global_lookup_assertion_failed": true,
+    "returncode": 101,
+    "peak_rss_bytes": 1602859008,
+    "elapsed_seconds": 21.427,
+    "proof_verified": false,
+    "global_relation_balances_verified": false
+  },
+  "ci": {
+    "components": "success",
+    "tiny_garbling": "success",
+    "upstream_conformance": "success",
+    "local_diagnostic": "success_after_original_proof_rejection"
+  },
+  "artifact": {
+    "id": 13738271051,
+    "digest": "sha256:28730264fb7b4352e1ab5b48271f65270df4ffcaac3f956f79255277184795d2",
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42760962243/artifacts/13738271051"
+  },
+  "next": "Check another active component claimed sum using its own exact native challenge; identify the first local mismatch and then cross-component relation cancellation",
+  "scope": {
+    "complete_stark_proof_verified": false,
+    "shinigami_program_verified_by_stark": false,
+    "bitvm3_settlement_verified": false,
+    "ark_utxoref_authorized": false
+  }
+}

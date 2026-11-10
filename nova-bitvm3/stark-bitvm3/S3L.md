@@ -29,3 +29,15 @@ A component-claim mismatch should be reproduced with a minimal native fixture be
 ## One native diagnostic activation
 
 Routine CI passed for the code in [commit 8e178cb9](https://github.com/patrickdugan/garbled-snark-verifier/commit/8e178cb9044de1403f54fb680bba8ef84ffb525b), including its fast parser/source-shape checks, original S0/S1 circuits and the existing garbling integration. The following separate marker-triggered commit makes **one** opt-in `[s3-local]` run against the immutable saved Shinigami CSV execution, using the existing 4 GiB sampled RSS watchdog, 120-second proof deadline and 15-minute total CI job. A diagnostic is successful only if the source-matched component comparison is recorded, the native global lookup assertion rejects the proof, and the report remains explicitly unauthenticated. This trigger does not start Nova/SP1 or full STARK-to-BitVM3 garbling.
+
+## Measured source-pinned comparison
+
+[Run 42760962243](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42760962243) passed all four jobs on trigger commit `b67a9fba`. The opt-in native diagnostic recovered **2,048 raw source rows and 959 distinct nonzero signed tuples** (including a zero-value tuple), with total negative multiplicity 51,200 in M31 representatives. From the native Fiat-Shamir challenge, their exact QM31 sum was:
+
+`(1940708650 + 312008446i) + (1727873078 + 211651567i)u`.
+
+This **equaled** `interaction_claim.range_check_11.claimed_sum` limb for limb. The native global lookup assertion still rejected the full Shinigami execution with code 101 and the same pinned QM31 global residual. Peak sampled RSS was **1,602,859,008 bytes** and the native diagnostic ran for **21.427 seconds**, below both the 4 GiB and 120-second bounds.
+
+The result rules out a mismatch between reconstructed source relations and the native claimed LogUp sum **for this selected component and source profile**. It leaves the 36 other active interaction claims, public-memory contribution, full relation cancellation, and the separate producer/verifier compatibility question open.
+
+Evidence: [Actions artifact 13738271051](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42760962243/artifacts/13738271051), ZIP SHA-256 `28730264fb7b4352e1ab5b48271f65270df4ffcaac3f956f79255277184795d2`; machine-readable [S3L_RESULTS.json](S3L_RESULTS.json). No native Cairo proof or Bitcoin authorization was produced.
