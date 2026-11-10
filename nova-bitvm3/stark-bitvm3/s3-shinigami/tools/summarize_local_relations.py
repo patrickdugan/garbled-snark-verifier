@@ -7,10 +7,12 @@ from pathlib import Path
 import re
 
 from summarize_relations import summarize
+from summarize_lookup import field
 
 SCOPE = "S3_LOCAL_SCOPE component=range_check_11 partial=true"
 COLS = re.compile(r"(?m)^S3_LOCAL_COLUMNS component=range_check_11 preprocessed=(\d+) base=(\d+) rows=(\d+)$")
 ENTRIES = re.compile(r"(?m)^S3_LOCAL_ENTRIES count=(\d+)$")
+LOGUP = re.compile(r"(?m)^S3_LOCAL_LOGUP recomputed=(.+?) claimed=(.+?) matches=(true|false)$")
 
 
 def parse(log: str, proof_report: dict) -> dict:
@@ -26,6 +28,14 @@ def parse(log: str, proof_report: dict) -> dict:
         raise ValueError("selected component exceeded fixed shape")
     if not 1 <= n_entries <= 2048:
         raise ValueError("selected component emitted unexpected number of tuples")
+    results = LOGUP.findall(log)
+    if len(results) != 1:
+        raise ValueError("missing or repeated native component LogUp comparison")
+    recomputed = field(results[0][0])
+    claimed = field(results[0][1])
+    agrees = recomputed == claimed
+    if agrees != (results[0][2] == "true"):
+        raise ValueError("native component LogUp comparison flag disagrees with printed values")
     result = summarize(log, proof_report)
     if "CommonLookupElements" not in result["relations_observed"]:
         raise ValueError("expected range-check relation absent from selected component")
@@ -38,6 +48,9 @@ def parse(log: str, proof_report: dict) -> dict:
         "source_preprocessed_columns":pre,
         "source_base_columns":base,
         "local_tuple_entries":n_entries,
+        "component_logup_recomputed":list(recomputed),
+        "component_logup_claimed":list(claimed),
+        "component_claim_sum_matches":agrees,
         "component_local_result_only":True,
         "relation_inventory_complete":False,
         "global_relation_balances_verified":False,

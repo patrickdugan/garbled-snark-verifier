@@ -1,0 +1,56 @@
+{
+  "stage": "S3k local range_check_11 relation audit",
+  "code_commit": "8902f1fee7665b47cf1dca1c48fc44dbcdde9244",
+  "trigger_commit": "1c916ead4615e232c25ca1f2cbcaf2a535e4f1ba",
+  "run_id": 42759229663,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42759229663",
+  "upstream_pins": {
+    "stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+    "stwo": "aeceb74c"
+  },
+  "frozen_prover_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "selected_component": {
+    "name": "range_check_11",
+    "trace_rows": 2048,
+    "preprocessed_columns": 1,
+    "base_columns": 1,
+    "raw_relation_entries": 2048,
+    "nonzero_distinct_local_tuples": 959,
+    "relation_name": "CommonLookupElements",
+    "report_truncated": false,
+    "full_relation_inventory": false
+  },
+  "native_run": {
+    "proof_status": "original_native_lookup_assertion_failed",
+    "exit_code": 101,
+    "elapsed_seconds": 18.72,
+    "peak_rss_bytes": 1583017984,
+    "rss_cap_bytes": 4294967296,
+    "global_residual": [
+      1866027004,
+      1908263159,
+      1713629672,
+      1017174456
+    ],
+    "native_proof_verified": false
+  },
+  "ci": {
+    "components": "success",
+    "tiny_garbling": "success",
+    "upstream_conformance": "success",
+    "local_diagnostic": "success_when_proof_rejected"
+  },
+  "artifact": {
+    "id": 13736684080,
+    "name": "shinigami-s3-small-1c916ead4615e232c25ca1f2cbcaf2a535e4f1ba",
+    "zip_sha256": "34ce7aefc42eb75196527806e348428e01fd807604a0fb19a4dca851b16faa92",
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42759229663/artifacts/13736684080"
+  },
+  "scope": {
+    "partial_unmatched_tuples_only": true,
+    "component_logup_sum_checked": false,
+    "full_shinigami_stark_verified": false,
+    "bitvm3_settlement_verified": false,
+    "ark_utxoref_authorized": false
+  }
+}

@@ -30,6 +30,8 @@ pub fn track_local_range_check_11_relations<MC: MerkleChannel>(
     commitment_scheme: &CommitmentSchemeProver<'_, SimdBackend, MC>,
     components: &CairoComponents,
     _public_data: &PublicData,
+    common_lookup: &cairo_air::relations::CommonLookupElements,
+    claimed_sum: stwo::core::fields::qm31::SecureField,
 ) -> RelationSummary
 where
     SimdBackend: BackendForChannel<MC>,
@@ -95,6 +97,25 @@ where
     // Exact upstream framework evaluator and bit-reversed mask semantics.
     let entries = add_to_relation_entries(component, &view);
     eprintln!("S3_LOCAL_ENTRIES count={}", entries.len());
+    // The exact upstream LogUp relation uses one signed multiplicity divided
+    // by the Fiat-Shamir-combined tuple. Compare the reconstructed component
+    // sum against its native interaction claim before checking the global sum.
+    use stwo::core::fields::{qm31::SecureField, FieldExpOps};
+    use stwo_constraint_framework::Relation;
+    let mut reconstructed_sum = SecureField::zero();
+    for entry in &entries {
+        assert_eq!(entry.relation, "CommonLookupElements");
+        let denominator: SecureField = common_lookup.combine(&entry.values);
+        assert_ne!(denominator, SecureField::zero(), "zero local LogUp denominator");
+        let m = SecureField::from_m31(
+            entry.mult, M31::zero(), M31::zero(), M31::zero(),
+        );
+        reconstructed_sum += m * denominator.inverse();
+    }
+    eprintln!(
+        "S3_LOCAL_LOGUP recomputed={:?} claimed={:?} matches={}",
+        reconstructed_sum, claimed_sum, reconstructed_sum == claimed_sum
+    );
     RelationSummary::summarize_relations(&entries).cleaned()
 }
 """
@@ -105,6 +126,16 @@ def instrument_prover(source: str) -> str:
     if patched.count(UPSTREAM_NAME) != 2:
         raise ValueError("pinned tracker call/import shape changed")
     patched = patched.replace(UPSTREAM_NAME, TRACKER_NAME)
+    old_call = """                &commitment_scheme, &component_builder, &claim.public_data,
+            );"""
+    new_call = """                &commitment_scheme, &component_builder, &claim.public_data,
+                &interaction_elements,
+                interaction_claim.range_check_11
+                    .as_ref().expect("missing native range_check_11 claim").claimed_sum,
+            );"""
+    if patched.count(old_call) != 1:
+        raise ValueError("source-pinned native tracker invocation changed")
+    patched = patched.replace(old_call, new_call)
     needle = '            eprintln!("S3_RELATIONS_TEXT_BEGIN");'
     if patched.count(needle) != 1:
         raise ValueError("pinned summary-output shape changed")
@@ -157,7 +188,8 @@ def prepare(root: Path, destination: Path) -> dict:
         "selected_component":COMPONENT,
         "selected_rows":2048,
         "maximum_columns_per_tree":4,
-        "source_equivalence":"uses upstream add_to_relation_entries on canonical component domain",
+        "source_equivalence":"uses upstream add_to_relation_entries and native interaction challenge on canonical component domain",
+        "claimed_sum_comparison":"exact signed LogUp sum from reconstructed source tuples vs native component interaction claim",
         "full_relation_inventory":False,
         "patch_sha256":hashlib.sha256(patch.encode()).hexdigest(),
         "prover_original_lookup_assertion_preserved":True,

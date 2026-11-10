@@ -33,6 +33,7 @@ def native_log():
         "S3_RELATIONS_BEGIN\n"
         "S3_LOCAL_COLUMNS component=range_check_11 preprocessed=1 base=1 rows=2048\n"
         "S3_LOCAL_ENTRIES count=2048\n"
+        "S3_LOCAL_LOGUP recomputed=(18 + 2i) + (3 + 4i)u claimed=(18 + 2i) + (3 + 4i)u matches=true\n"
         + SCOPE_LABEL + "\n"
         "S3_RELATIONS_TEXT_BEGIN\n"
         "CommonLookupElements:\n  [991608089, 2] -> 2147483646\n"
@@ -48,6 +49,8 @@ class LocalRelationTests(unittest.TestCase):
     def test_feature_hook_pins_one_partial_component(self):
         p=instrument_prover(PROVER)
         self.assertIn(SCOPE_LABEL,p)
+        self.assertIn("&interaction_elements,",p)
+        self.assertIn('interaction_claim.range_check_11',p)
         self.assertEqual(p.count("track_local_range_check_11_relations"),2)
         self.assertEqual(p.count("debug_assert_eq!("),2)
         self.assertEqual(p.count("interaction_claim.mix_into(channel);"),1)
@@ -60,6 +63,9 @@ class LocalRelationTests(unittest.TestCase):
         self.assertIn("component.preprocessed_column_indices()",p)
         self.assertIn("component.trace_locations()",p)
         self.assertIn("add_to_relation_entries(component, &view)",p)
+        self.assertIn("common_lookup.combine(&entry.values)",p)
+        self.assertIn("denominator.inverse()",p)
+        self.assertIn("S3_LOCAL_LOGUP recomputed=",p)
         self.assertIn("assert!(coeffs.log_size() <= log_size",p)
         self.assertIn("indices[ORIGINAL_TRACE_IDX].extend",p)
         self.assertNotIn("track_and_summarize_cairo_relations",LOCAL_RUST)
@@ -79,10 +85,31 @@ class LocalRelationTests(unittest.TestCase):
         self.assertEqual(r["source_preprocessed_columns"],1)
         self.assertEqual(r["source_base_columns"],1)
         self.assertTrue(r["component_local_result_only"])
+        self.assertTrue(r["component_claim_sum_matches"])
+        self.assertEqual(r["component_logup_recomputed"],[18,2,3,4])
+        self.assertEqual(r["component_logup_claimed"],[18,2,3,4])
         self.assertFalse(r["relation_inventory_complete"])
         self.assertFalse(r["global_relation_balances_verified"])
         self.assertFalse(r["native_proof_verified"])
         self.assertFalse(r["bitcoin_settlement_authorized"])
+
+    def test_component_logup_mismatch_is_recorded_without_acceptance(self):
+        different = native_log().replace(
+            "claimed=(18 + 2i) + (3 + 4i)u matches=true",
+            "claimed=(19 + 2i) + (3 + 4i)u matches=false",
+        )
+        result = parse(different, failed_report())
+        self.assertFalse(result["component_claim_sum_matches"])
+        self.assertFalse(result["native_proof_verified"])
+        self.assertFalse(result["global_relation_balances_verified"])
+
+    def test_inconsistent_native_logup_flag_is_rejected(self):
+        with self.assertRaises(ValueError):
+            parse(native_log().replace("matches=true","matches=false"), failed_report())
+        with self.assertRaises(ValueError):
+            parse(native_log().replace("S3_LOCAL_LOGUP", "S3_LOCAL_OTHER"), failed_report())
+        with self.assertRaises(ValueError):
+            parse(native_log() + "S3_LOCAL_LOGUP recomputed=(1 + 0i) + (0 + 0i)u claimed=(1 + 0i) + (0 + 0i)u matches=true\n",failed_report())
 
     def test_diagnostic_requires_failed_original_assertion(self):
         with self.assertRaises(ValueError):
