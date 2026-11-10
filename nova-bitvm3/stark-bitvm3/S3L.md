@@ -25,3 +25,7 @@ No result is accepted as proof verification. The new parser requires that the **
 ## Next gate
 
 A component-claim mismatch should be reproduced with a minimal native fixture before changing generator code. Matching component sums lead to inspecting another small component with an active interaction claim, followed by cross-component cancellation of the `CommonLookupElements` relation. Every repair must eventually pass unmodified native proving and native verification for the exact Shinigami program and public statement. The S2 garbler remains a separate, older Stwo protocol path until source compatibility is established.
+
+## One native diagnostic activation
+
+Routine CI passed for the code in [commit 8e178cb9](https://github.com/patrickdugan/garbled-snark-verifier/commit/8e178cb9044de1403f54fb680bba8ef84ffb525b), including its fast parser/source-shape checks, original S0/S1 circuits and the existing garbling integration. The following separate marker-triggered commit makes **one** opt-in `[s3-local]` run against the immutable saved Shinigami CSV execution, using the existing 4 GiB sampled RSS watchdog, 120-second proof deadline and 15-minute total CI job. A diagnostic is successful only if the source-matched component comparison is recorded, the native global lookup assertion rejects the proof, and the report remains explicitly unauthenticated. This trigger does not start Nova/SP1 or full STARK-to-BitVM3 garbling.
