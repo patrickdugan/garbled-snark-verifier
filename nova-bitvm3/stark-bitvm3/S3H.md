@@ -19,3 +19,7 @@ Routine CI runs only fast unit tests of the patch generator and log parser. No r
 A successful S3h **diagnostic job** means that the native assertion rejected the same witness and the relation tracker produced parseable evidence under budget. It does not establish proof soundness. The next source-side fix must explain and remove the unmatched relation multiplicity, preserve every original AIR/LogUp obligation, and pass a source-matched native prover **and** verifier check. Only then can the correct Cairo verifier be lowered to Boolean gates and evaluated through the BitVM3 garbler.
 
 The recorded relation audit is scoped to the saved Shinigami regtest CSV fixture. Ark exit semantics, UTXORef authorization and actual Bitcoin dispute settlement remain future, independently tested application relations.
+
+## Single source-pinned diagnostic activation
+
+The first code-only pass at `f43adcb4d5817ecf1fb343700f588609d3095365` passed all three routine CI jobs in [run 42750869821](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42750869821), including the instrumentation/parser unit tests. The following separate, marker-triggered commit is the only authorized S3h relation-tracker trial. It will reproduce the baseline failed native lookup assertion, print a capped relation anomaly summary, and retain process-tree RSS and elapsed-time evidence. A failed resource guard is an inconclusive diagnostic that must remain visible as a failed job.
