@@ -100,6 +100,8 @@ def render_ledger(summary, log_text: str, instrument, report) -> list[str]:
         out.append(notice("S3P tuples", json.dumps(
             {"public": summary.get("public"), "tuple_ledgers": summary.get("tuple_ledgers")},
             separators=(",", ":"))))
+        out.append(notice("S3P unmatched", json.dumps(
+            summary.get("unmatched_address_uses"), separators=(",", ":"))))
         out.append(notice("S3P resources", json.dumps(
             {"resources": summary.get("resources"), "elapsed_ms": summary.get("elapsed_ms"),
              "residual": summary.get("baseline_residual")}, separators=(",", ":"))))
