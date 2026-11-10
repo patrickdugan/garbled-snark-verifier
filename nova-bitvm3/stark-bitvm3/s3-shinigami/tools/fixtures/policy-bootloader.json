@@ -1,0 +1,34 @@
+{
+  "profile": "bootloader",
+  "program_words": 3182,
+  "program_sha256_u256le": "81761bcc7b4d619eca468e933248097b304135b29d855be1ccfba02363c2966e",
+  "program_is_executable": false,
+  "output_start": 2002937,
+  "output_stop": 2002961,
+  "bootloader_prefix": [
+    "1",
+    "23",
+    "95136418571618486416724384618155090416044437718704616005941250299927479032"
+  ],
+  "source_input_sha256": "02c8508f635c7934b1a3ac13eedf5545ea4681f1a72edc51685c7b0fd5ccc031",
+  "source_input_bytes": 121452932,
+  "source_file": "prover_input.json.gz",
+  "source_run": 42642735526,
+  "schema": 1,
+  "channel_salt": 0,
+  "preprocessed_trace_variant": "canonical_small",
+  "pcs_config": {
+    "pow_bits": 26,
+    "fri_config": {
+      "log_last_layer_degree_bound": 0,
+      "log_blowup_factor": 1,
+      "n_queries": 70,
+      "fold_step": 1
+    },
+    "lifting_log_size": 22
+  },
+  "shinigami_rev": "7e8c05d60b4bd7ae91ddc18a42e8e13090286f0c",
+  "stwo_cairo_rev": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+  "compiled_executable_json_sha256": "a9bdc409d2f7ee443ac62cabdc8df27fb44c85a435ca9350788bee890f61bef3",
+  "notes": "Source trace provenance pin; native proof verification and Bitcoin settlement remain outstanding."
+}

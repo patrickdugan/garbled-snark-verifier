@@ -1,0 +1,30 @@
+{
+  "profile": "standalone",
+  "program_words": 169856,
+  "program_sha256_u256le": "ef98c72eff798d04a235c395be190c38b536a584a9dd5f66692e2174ac5b8b7f",
+  "program_is_executable": true,
+  "output_start": 292275,
+  "output_stop": 292296,
+  "bootloader_prefix": [],
+  "source_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "source_input_bytes": 9624654,
+  "source_file": "standalone-prover-input.json.gz",
+  "source_run": 42721464987,
+  "schema": 1,
+  "channel_salt": 0,
+  "preprocessed_trace_variant": "canonical_small",
+  "pcs_config": {
+    "pow_bits": 26,
+    "fri_config": {
+      "log_last_layer_degree_bound": 0,
+      "log_blowup_factor": 1,
+      "n_queries": 70,
+      "fold_step": 1
+    },
+    "lifting_log_size": 22
+  },
+  "shinigami_rev": "7e8c05d60b4bd7ae91ddc18a42e8e13090286f0c",
+  "stwo_cairo_rev": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+  "compiled_executable_json_sha256": "a9bdc409d2f7ee443ac62cabdc8df27fb44c85a435ca9350788bee890f61bef3",
+  "notes": "Source trace provenance pin; native proof verification and Bitcoin settlement remain outstanding."
+}
