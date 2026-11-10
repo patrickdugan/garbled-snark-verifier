@@ -1,5 +1,6 @@
 """Proof-free checks for the bitwise_builtin caller-AIR XOR8 ledger and its patch shape."""
 from __future__ import annotations
+from pathlib import Path
 import unittest
 
 from instrument_xor8_caller_air import (
@@ -9,7 +10,7 @@ from instrument_xor8_caller_air import (
 )
 from summarize_lookup import modadd
 from summarize_xor8_caller_air import (
-    P, ZERO_TUPLE, ledger_nonzero, negative_controls, parse, parse_caller,
+    FROZEN, P, ZERO_TUPLE, ledger_nonzero, negative_controls, parse, parse_caller, signed,
 )
 from test_xor8_relations import PROVER, TRACKER, WITNESS, native_log, native_report
 
@@ -21,6 +22,7 @@ FAMILY_QM = {
     XOR8_TAG: (11, 22, 33, 44),
 }
 DIGEST = "ab" * 32
+SYNTHETIC_FROZEN = {"component_claim": modadd(*FAMILY_QM.values()), "source_digest": DIGEST}
 
 
 def qm(v):
@@ -273,7 +275,7 @@ class LedgerTests(unittest.TestCase):
 class NativeEvidenceTests(unittest.TestCase):
     def test_full_evidence_requires_s3m_pins_and_resource_caps(self):
         report = with_stage_resources(native_report())
-        result = parse(full_log(), report)
+        result = parse(full_log(), report, SYNTHETIC_FROZEN)
         self.assertTrue(result["xor8_zero_tuple_cancellation_established"])
         self.assertTrue(result["global_native_lookup_assertion_failed"])
         self.assertFalse(result["full_global_lookup_balance_verified"])
@@ -286,22 +288,85 @@ class NativeEvidenceTests(unittest.TestCase):
             {**with_stage_resources(native_report()), "native_proof_verified": True},
         ):
             with self.assertRaises(ValueError):
-                parse(full_log(), report_bad)
+                parse(full_log(), report_bad, SYNTHETIC_FROZEN)
 
     def test_native_global_rejection_is_still_required(self):
         report = with_stage_resources(native_report())
         with self.assertRaises(ValueError):
-            parse(full_log().replace("1866027004", "1866027003"), report)
+            parse(full_log().replace("1866027004", "1866027003"), report, SYNTHETIC_FROZEN)
         with self.assertRaises(ValueError):
-            parse(full_log().replace("assertion left == right failed", "ok"), report)
+            parse(full_log().replace("assertion left == right failed", "ok"), report, SYNTHETIC_FROZEN)
         with self.assertRaises(ValueError):
-            parse(full_log().replace("matches=true", "matches=false"), report)
+            parse(full_log().replace("matches=true", "matches=false"), report, SYNTHETIC_FROZEN)
+
+
+REAL_BLOCK = (Path(__file__).parent / "fixtures" / "s3o-caller-block.txt").read_text()
+
+
+class MeasuredBlockTests(unittest.TestCase):
+    """The log block printed by the native diagnostic on the frozen standalone input."""
+
+    def test_measured_block_establishes_cancellation_and_matches_ci_annotations(self):
+        result = parse_caller(REAL_BLOCK)
+        self.assertTrue(result["xor8_zero_tuple_cancellation_established"])
+        self.assertEqual(result["caller_xor8_tuples"],
+                         [dict(tuple=list(Z), mult=1, count=4096)])
+        self.assertEqual(result["caller_xor8_signed_total"], 4096)
+        self.assertEqual(result["table_xor8_signed_total"], -4096)
+        self.assertEqual(result["ledger_nonzero_tuples"], 0)
+        self.assertEqual(result["ledger_qm31_total"], [0, 0, 0, 0])
+        self.assertEqual(tuple(result["component_logup_claimed"]), FROZEN["component_claim"])
+        self.assertEqual(result["source_digest_blake2s"], FROZEN["source_digest"])
+        self.assertEqual({t: (f["entries"], f["distinct_tuples"]) for t, f in result["caller_families"].items()},
+                         {"95781001": (110592, 8481), "112558620": (4096, 1),
+                          "1444891767": (20480, 20480), "1662111297": (20480, 9431)})
+        self.assertEqual(result["negative_controls_nonzero_tuples"], {
+            "missing_caller_entry": 1, "duplicated_caller_entry": 1,
+            "altered_caller_tuple": 2, "altered_caller_multiplicity": 1,
+            "missing_table_entry": 1, "duplicated_table_entry": 1})
+
+    def test_full_parse_with_frozen_pins(self):
+        result = parse(full_log(REAL_BLOCK), with_stage_resources(native_report()))
+        self.assertTrue(result["xor8_zero_tuple_cancellation_established"])
+        self.assertFalse(result["full_global_lookup_balance_verified"])
+        with self.assertRaises(ValueError):
+            parse(full_log(REAL_BLOCK.replace("6ea9ccb9", "6ea9ccb8")),
+                  with_stage_resources(native_report()))
+        with self.assertRaises(ValueError):
+            parse(full_log(REAL_BLOCK.replace("recomputed=1876312143", "recomputed=1876312144")
+                           .replace("claimed=1876312143", "claimed=1876312144")),
+                  with_stage_resources(native_report()))
+
+    def test_every_single_line_deletion_or_duplication_is_rejected(self):
+        lines = REAL_BLOCK.rstrip(chr(10)).split(chr(10))
+        for index in range(len(lines)):
+            deleted = chr(10).join(lines[:index] + lines[index + 1:]) + chr(10)
+            duplicated = chr(10).join(lines[:index + 1] + lines[index:]) + chr(10)
+            for label, text in (("delete", deleted), ("duplicate", duplicated)):
+                with self.assertRaises(ValueError, msg=f"{label} line {index}: {lines[index][:60]}"):
+                    parse_caller(text)
+
+    def test_every_digit_change_in_a_ledger_input_is_rejected(self):
+        for before, after in [
+            ("tuple=112558620,0,0,0 mult=1 count=4096", "tuple=112558620,0,0,0 mult=1 count=4095"),
+            ("tuple=112558620,0,0,0 mult=2147479551 count=1", "tuple=112558620,0,0,0 mult=2147479550 count=1"),
+            ("tuple=112558620,0,0,0 mult=1 count=4096", "tuple=112558620,0,0,1 mult=1 count=4096"),
+            ("tag=112558620 entries=4096", "tag=112558620 entries=4095"),
+            ("caller=42348298,", "caller=42348299,"),
+            ("total=0,0,0,0 zero=true", "total=0,0,0,1 zero=true"),
+        ]:
+            self.assertEqual(REAL_BLOCK.count(before), 1, before)
+            with self.assertRaises(ValueError, msg=before):
+                parse_caller(REAL_BLOCK.replace(before, after))
+
+    def test_signed_representative(self):
+        self.assertEqual((signed(4096), signed(P - 4096), signed(0)), (4096, -4096, 0))
 
 
 class AnnotationTests(unittest.TestCase):
     def test_summary_is_published_compactly_and_newlines_are_escaped(self):
         from annotate_caller_summary import escape, render
-        summary = parse(full_log(), with_stage_resources(native_report()))
+        summary = parse(full_log(), with_stage_resources(native_report()), SYNTHETIC_FROZEN)
         lines = render(summary, "", {"patch_sha256": "ab", "upstream_revision": "cd",
                                      "source_file_hashes": []}, None)
         self.assertTrue(all(l.startswith("::notice title=S3O") for l in lines))

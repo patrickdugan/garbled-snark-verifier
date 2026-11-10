@@ -82,6 +82,11 @@ def groups(pattern: re.Pattern, lines: re.Pattern, log: str, what: str) -> list:
     return found
 
 
+def signed(value: int) -> int:
+    """Signed representative of an M31 residue."""
+    return value if value <= P // 2 else value - P
+
+
 def ledger_nonzero(*sides) -> dict:
     """Exact signed multiplicity per tuple modulo M31; zero nets are dropped."""
     net: dict = {}
@@ -219,11 +224,11 @@ def parse_caller(log: str) -> dict:
         "component_claim_sum_matches": True,
         "component_families_account_for_full_claim": True,
         "caller_xor8_entries": ROWS,
-        "caller_xor8_signed_total": expected_caller_total,
+        "caller_xor8_signed_total": signed(expected_caller_total),
         "caller_xor8_tuples": [dict(tuple=list(t), mult=m, count=c) for t, m, c in caller],
         "caller_xor8_all_zero_tuple": zero_only,
         "table_xor8_signed_total_mod_p": expected_table_total,
-        "table_xor8_signed_total": expected_table_total - P,
+        "table_xor8_signed_total": signed(expected_table_total),
         "table_xor8_nonzero_entries": [dict(tuple=list(t), mult=m, count=c) for t, m, c in table],
         "table_entries_total": shape[0],
         "ledger_nonzero_tuples": len(net),
@@ -241,7 +246,16 @@ def parse_caller(log: str) -> dict:
     }
 
 
-def parse(log: str, report: dict) -> dict:
+# Measured on the frozen standalone input (CI run 42834108025, commit ffe0596): the
+# bitwise_builtin QM31 interaction claim under the native challenge, and the digest of
+# the 89 captured base columns plus the sequence column.
+FROZEN = {
+    "component_claim": (1876312143, 249812616, 1375950257, 238553224),
+    "source_digest": "6ea9ccb9974ec6bdaf50e14cdc7f9d826117d848f058a3d219682660fdf72f83",
+}
+
+
+def parse(log: str, report: dict, frozen: dict = FROZEN) -> dict:
     # S3m pins: native rejection, table claim equality and the single zero-tuple residual.
     local = parse_local(log, report)
     if local.get("component_claim_sum_matches") is not True:
@@ -251,6 +265,10 @@ def parse(log: str, report: dict) -> dict:
     if local.get("nonzero_relation_tuple_lines_observed") != 1:
         raise ValueError("expected one nonzero zero-input tuple in the XOR8 table")
     result = parse_caller(log)
+    if tuple(result["component_logup_claimed"]) != tuple(frozen["component_claim"]):
+        raise ValueError("bitwise_builtin native claim differs from the frozen-input measurement")
+    if result["source_digest_blake2s"] != frozen["source_digest"]:
+        raise ValueError("captured bitwise_builtin source rows differ from the frozen-input measurement")
     stage = report["stages"][0]
     limit = report.get("rss_budget_mib", 0) * 1024 * 1024
     if not 0 < stage["peak_rss_bytes"] <= limit <= 4096 * 1024 * 1024:

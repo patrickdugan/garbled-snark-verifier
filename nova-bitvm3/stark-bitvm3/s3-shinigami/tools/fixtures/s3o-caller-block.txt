@@ -1,0 +1,23 @@
+S3_CALLER_BEGIN component=bitwise_builtin
+S3_CALLER_SHAPE rows=4096 base_columns=89 preprocessed_columns=1
+S3_CALLER_SOURCE_DIGEST blake2s=6ea9ccb9974ec6bdaf50e14cdc7f9d826117d848f058a3d219682660fdf72f83
+S3_CALLER_ENTRIES total=155648 per_row=38 rows_with_one_xor8=4096
+S3_CALLER_FAMILY tag=95781001 entries=110592 distinct_tuples=8481 mult_sum_mod_p=110592 qm31=97539159,932059386,1176692205,458254759
+S3_CALLER_FAMILY tag=112558620 entries=4096 distinct_tuples=1 mult_sum_mod_p=4096 qm31=42348298,1055827101,773699044,64557429
+S3_CALLER_FAMILY tag=1444891767 entries=20480 distinct_tuples=20480 mult_sum_mod_p=20480 qm31=1847391689,2083409953,874710954,1401549321
+S3_CALLER_FAMILY tag=1662111297 entries=20480 distinct_tuples=9431 mult_sum_mod_p=20480 qm31=2036516644,473483470,698331701,461675362
+S3_CALLER_LOGUP recomputed=1876312143,249812616,1375950257,238553224 claimed=1876312143,249812616,1375950257,238553224 family_sum=1876312143,249812616,1375950257,238553224 matches=true family_sum_matches=true
+S3_XOR8_CALLER_ENTRY tuple=112558620,0,0,0 mult=1 count=4096
+S3_XOR8_CALLER_LINES printed=1 distinct=1 truncated=false
+S3_XOR8_TABLE_SHAPE entries=131072 zero_mult=131071 nonzero=1
+S3_XOR8_TABLE_ENTRY tuple=112558620,0,0,0 mult=2147479551 count=1
+S3_XOR8_TABLE_LINES printed=1 distinct=1 truncated=false
+S3_XOR8_LEDGER_QM31 caller=42348298,1055827101,773699044,64557429 table=2105135349,1091656546,1373784603,2082926218 total=0,0,0,0 zero=true
+S3_XOR8_LEDGER baseline_nonzero_tuples=0 caller_entries=4096 caller_mult_total_mod_p=4096 table_mult_total_mod_p=2147479551
+S3_XOR8_NEGATIVE name=missing_caller_entry nonzero_tuples=1 detected=true
+S3_XOR8_NEGATIVE name=duplicated_caller_entry nonzero_tuples=1 detected=true
+S3_XOR8_NEGATIVE name=altered_caller_tuple nonzero_tuples=2 detected=true
+S3_XOR8_NEGATIVE name=altered_caller_multiplicity nonzero_tuples=1 detected=true
+S3_XOR8_NEGATIVE name=missing_table_entry nonzero_tuples=1 detected=true
+S3_XOR8_NEGATIVE name=duplicated_table_entry nonzero_tuples=1 detected=true
+S3_CALLER_END
