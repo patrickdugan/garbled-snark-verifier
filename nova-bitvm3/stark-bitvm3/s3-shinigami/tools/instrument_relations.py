@@ -37,6 +37,16 @@ TRACKER_NEW = """                // Preserve the original trace domain when reco
                     .values
                     .to_cpu()
 """
+# The generic pinned RelationTrackerEvaluator rejects interaction-column reads
+# (INTERACTION_TRACE_IDX=2). Reconstructing that tree is wasted work and can
+# exceed the 4 GiB diagnostic cap. Keep its original proof commitment intact.
+TRACKER_MAP_OLD = "    let evals = commitment_scheme.trace().polys.map(|interaction_tree| {"
+TRACKER_MAP_NEW = """    let mut trace_polys = commitment_scheme.trace().polys;
+    assert_eq!(trace_polys.len(), stwo_constraint_framework::INTERACTION_TRACE_IDX + 1);
+    // The relation evaluator only accesses preprocessed/base trace columns.
+    // This affects diagnostic reconstruction after the full proof commitment.
+    trace_polys[stwo_constraint_framework::INTERACTION_TRACE_IDX].clear();
+    let evals = trace_polys.map(|interaction_tree| {"""
 FEATURE = "stwo-cairo-prover/relation-tracker"
 OLD_LOOKUP = """    // Validate lookup argument.
     debug_assert_eq!(
@@ -143,6 +153,12 @@ def restore_tracker_domain(source: str) -> str:
     return source.replace(TRACKER_OLD, TRACKER_NEW)
 
 
+def skip_unused_interaction_reconstruction(source: str) -> str:
+    if source.count(TRACKER_MAP_OLD) != 1:
+        raise ValueError("unexpected upstream trace-reconstruction layout")
+    return source.replace(TRACKER_MAP_OLD, TRACKER_MAP_NEW)
+
+
 def prepare(root: Path, destination: Path) -> dict:
     root = root.resolve()
     head = subprocess.check_output(
@@ -160,7 +176,7 @@ def prepare(root: Path, destination: Path) -> dict:
     if tracker_path.read_text() != tracker_original:
         raise ValueError("pinned relation tracker source was already modified")
     modified = instrument(original)
-    tracker_modified = restore_tracker_domain(tracker_original)
+    tracker_modified = skip_unused_interaction_reconstruction(restore_tracker_domain(tracker_original))
     # Validate both files before changing either ephemeral upstream file.
     path.write_text(modified)
     tracker_path.write_text(tracker_modified)
@@ -184,6 +200,8 @@ def prepare(root: Path, destination: Path) -> dict:
         "tracker_before_sha256": hashlib.sha256(tracker_original.encode()).hexdigest(),
         "tracker_after_sha256": hashlib.sha256(tracker_modified.encode()).hexdigest(),
         "tracker_row_count_preserved": True,
+        "interaction_tree_reconstruction_skipped": True,
+        "framework_relation_evaluator_reads_interaction_tree": False,
         "patch_sha256": hashlib.sha256(patch.encode()).hexdigest(),
         "max_debug_output_bytes": TEXT_CAP,
         "native_lookup_assertion_preserved": True,

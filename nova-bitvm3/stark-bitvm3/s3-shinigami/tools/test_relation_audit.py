@@ -3,7 +3,8 @@ import unittest
 
 from instrument_relations import (
     OLD_LOOKUP, OLD_TRACKER, TRACKER_OLD, TRACKER_NEW,
-    instrument, restore_tracker_domain,
+    instrument, restore_tracker_domain, skip_unused_interaction_reconstruction,
+    TRACKER_MAP_OLD, TRACKER_MAP_NEW,
 )
 from summarize_relations import summarize
 
@@ -67,6 +68,20 @@ class RelationAuditTests(unittest.TestCase):
         self.assertIn("let original_domain = poly.evals.domain;", altered)
         self.assertIn(".evaluate(original_domain)", altered)
         self.assertNotIn(".evaluate(CanonicCoset::new(coeffs.log_size()).circle_domain())", altered)
+
+    def test_skip_unused_interaction_reconstruction(self):
+        fixed = skip_unused_interaction_reconstruction(TRACKER_MAP_OLD)
+        self.assertEqual(fixed, TRACKER_MAP_NEW)
+        self.assertIn("INTERACTION_TRACE_IDX].clear()", fixed)
+        self.assertIn("assert_eq!(trace_polys.len()", fixed)
+        self.assertNotIn("let evals = commitment_scheme.trace().polys.map", fixed)
+
+    def test_trace_pruning_fails_on_changed_upstream_shape(self):
+        with self.assertRaises(ValueError):
+            skip_unused_interaction_reconstruction(TRACKER_MAP_OLD + TRACKER_MAP_OLD)
+        with self.assertRaises(ValueError):
+            skip_unused_interaction_reconstruction(TRACKER_MAP_OLD.replace(
+                "commitment_scheme.trace().polys", "commitment_scheme.new_trace().polys"))
 
     def test_tracker_patch_fails_on_changed_domain_source(self):
         with self.assertRaises(ValueError):
