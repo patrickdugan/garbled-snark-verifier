@@ -1,0 +1,56 @@
+{
+  "stage": "S3f canonical_small lookup-sum component diagnosis",
+  "tested_commit": "26f668772a997b8a4426cd2b324e5c29f9cac1d2",
+  "workflow_run": 42744991308,
+  "workflow_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42744991308",
+  "job": "s3-small-profile",
+  "upstream_sha": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+  "source_patch": {
+    "path": "stwo_cairo_prover/crates/cairo-air/src/claims.rs",
+    "before_sha256": "92b78ff266f82d172c93053fd6f75424a0baafd351c3ae862c9186901aa35fc0",
+    "after_sha256": "a69261b44ca0c93bd5d22e5cd746a199892c6d99a874e146f3830a81a0af1874",
+    "patch_sha256": "8e3264a1190b54d8050fb90fc9e64b62f0c72ff07a26ac47840d6cca5a33155d"
+  },
+  "diagnosis": {
+    "compiled_components": 66,
+    "present_components": 37,
+    "public_memory_contribution": [
+      559615079,
+      1208624373,
+      2076115172,
+      2076164551
+    ],
+    "total_residual": [
+      1866027004,
+      1908263159,
+      1713629672,
+      1017174456
+    ],
+    "residual_nonzero": true,
+    "recomputed_sum_equals_native": true,
+    "original_native_assertion_preserved": true
+  },
+  "native_proving": {
+    "return_code": 101,
+    "status": "original_lookup_sum_assertion_failed",
+    "elapsed_seconds": 17.713,
+    "peak_rss_bytes": 1232371712,
+    "peak_virtual_bytes": 1316700160,
+    "rss_limit_bytes": 4294967296,
+    "native_proof_produced": false,
+    "native_proof_verified": false
+  },
+  "source_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "artifact": {
+    "id": 13730548693,
+    "digest": "sha256:7d5b83602054c0ff9009044dc10298a40e1ef3fcf1dc029e9df93d1ddbdeb18a",
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42744991308/artifacts/13730548693"
+  },
+  "interpretation": "Global lookup residual is reproduced from public memory and 37 present component claims; unique faulty relation not identified.",
+  "scope": {
+    "ark_or_utxoref_proof_accepted": false,
+    "bitcoin_dispute_verified": false,
+    "s2_example_changed": false,
+    "nova_or_sp1_proving_run": false
+  }
+}

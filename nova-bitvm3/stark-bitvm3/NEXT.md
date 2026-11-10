@@ -1,5 +1,11 @@
 # Continuation after S2 and S3a
 
+## Updated blocker: S3f/S3g (November 10, 2026)
+
+The native lookup failure under `canonical_small` is now localized to a nonzero sum of 37 present component contributions plus public memory; the exact QM31 residual and source patch are recorded in [S3F_RESULTS.json](S3F_RESULTS.json). The native assertion remains the acceptance gate. Repeating the experiment with `canonical_without_pedersen` consumed the 4 GiB RSS budget **during preprocessing**, before the lookup check (see [S3G_RESULTS.json](S3G_RESULTS.json)). This larger variant cannot be evaluated within the current cap.
+
+The next controlled task is a bounded relation-level multiplicity audit on the low-memory `canonical_small` trace, using the pinned upstream `relation-tracker` only in an opt-in diagnostic. Record unmatched relation name and tuple values, identify the producer/trace-layout cause, patch its source, and require the original native prover and verifier to accept the same pinned transaction before attempting the S2 Boolean/garbled bridge. Avoid retrying the larger preprocessing job or raising runner memory limits without a changed and measured hypothesis.
+
 S2 at `f90a7095` passed an authentic small Stwo proof through one fixed complete verifier in native, Boolean and garbled execution. Its 16-bit FRI test profile remains unsuitable for production. S3a at `6618c3ac` executes a pinned Shinigami adapter with explicit receipts; the native proof probe at `c8894f4` stopped at an allocation failure under the 6 GiB address-space limit. Preserve these distinct evidence boundaries.
 
 ## Resume from the saved Shinigami execution

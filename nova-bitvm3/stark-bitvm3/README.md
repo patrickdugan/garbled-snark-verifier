@@ -1,5 +1,11 @@
 # Direct Stwo-to-Boolean prototype
 
+## S3f/S3g lookup and preprocessing experiments
+
+[Run 42744991308](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42744991308) measured the nonzero lookup-sum failure under `canonical_small`: 37 present interaction components reproduced the exact native residual, and the original assertion rejected the proof. The source-pinned profile consumed 1.23 GiB sampled RSS at failure. [S3F.md](S3F.md) and [S3F_RESULTS.json](S3F_RESULTS.json) preserve the diagnostic evidence.
+
+The alternative `canonical_without_pedersen` with the full sequence-table range compiled, then crossed its 4 GiB RSS limit in Merkle preprocessing before lookup verification. [Run 42745990977](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42745990977), [S3G.md](S3G.md), and [S3G_RESULTS.json](S3G_RESULTS.json) record that bounded negative result. Cairo proof generation, program binding and any Ark/UTXORef settlement authority remain outstanding.
+
 The S2 checkpoint checks an authentic small Stwo STARK through a fixed complete verifier in native, Boolean and garbled execution. It uses a squared-Fibonacci AIR with 32/16-row traces and deliberately weak test parameters.
 
 S3a adds a pinned Shinigami execution adapter and explicit transaction receipts. Its Cairo tests and standalone execution pass. The first native Cairo proving attempt stopped on an allocation failure under the fixed 6 GiB address-space cap. Cairo proof verification and its connection to the garbled verifier remain open.

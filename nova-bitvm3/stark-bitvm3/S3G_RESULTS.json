@@ -1,0 +1,48 @@
+{
+  "stage": "S3g canonical_without_pedersen full-sequence native trial",
+  "commit": "4bfe54a820d9752bad6eef6b71b6859b38d034cf",
+  "run_id": 42745990977,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42745990977",
+  "upstream_sha": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+  "profile": {
+    "variant": "canonical_without_pedersen",
+    "preprocessed_cells": 73338480,
+    "lifting_log_size": 26,
+    "pow_bits": 26,
+    "n_queries": 70,
+    "log_blowup_factor": 1,
+    "fold_step": 1,
+    "nominal_fri_security_bits": 96,
+    "pedersen_builtin_absent": true
+  },
+  "source_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "one_shot": {
+    "status": "rss_budget_exceeded",
+    "returncode": -15,
+    "elapsed_seconds": 19.315,
+    "peak_rss_bytes": 4295876608,
+    "rss_limit_bytes": 4294967296,
+    "peak_virtual_bytes": 7535628288,
+    "highest_logged_stage": "preprocessed Merkle commitment",
+    "lookup_sum_executed": false,
+    "native_proof_produced": false,
+    "native_proof_verified": false,
+    "kernel_enforced_memory_limit": false
+  },
+  "artifact": {
+    "id": 13731358056,
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42745990977/artifacts/13731358056",
+    "sha256": "b99042e4aab5c748059dbfba19e96e11c048f5c2c4830cb5c8ddd805f96bf086"
+  },
+  "routine_ci": {
+    "components": "passed",
+    "upstream_conformance": "passed",
+    "tiny_garbling": "passed"
+  },
+  "conclusion": "Full-length sequence-table profile crossed the measured RSS guard before lookup verification; no inference about the nonzero canonical_small lookup sum.",
+  "security": {
+    "no_ark_or_utxoref_authorization": true,
+    "no_bitcoin_dispute_protocol": true,
+    "no_nova_or_sp1_proving": true
+  }
+}
