@@ -9,7 +9,7 @@ from instrument_xor8_relations import (
 )
 from instrument_local_relations import LOCAL_RUST
 from instrument_relations import OLD_LOOKUP, OLD_TRACKER
-from summarize_xor8_relations import parse, EXPECTED_CLAIM
+from summarize_xor8_relations import parse, EXPECTED_CLAIM, PREPROCESS_SOURCE
 
 PROVER = (
     "    tree_builder.commit(channel);\n"
@@ -44,6 +44,7 @@ def native_log(recomputed=EXPECTED_CLAIM, claimed=EXPECTED_CLAIM, flag=True, tru
     return (
         "S3_RELATIONS_BEGIN\n"
         "S3_LOCAL_COLUMNS component=verify_bitwise_xor_8 preprocessed=3 base=2 rows=65536\n"
+        "S3_LOCAL_PREPROCESS_SOURCE canonical_pinned_original\n"
         "S3_LOCAL_ENTRIES count=131072\n"
         f"S3_LOCAL_LOGUP recomputed={qm(recomputed)} claimed={qm(claimed)} matches={str(flag).lower()}\n"
         + SCOPE_LABEL + "\n"
@@ -68,6 +69,11 @@ class Xor8ComponentTests(unittest.TestCase):
         self.assertIn("assert_eq!(logs[ORIGINAL_TRACE_IDX], vec![log_size; 2]);",patched)
         self.assertIn("assert_eq!(component.preprocessed_column_indices().len(), 3);",patched)
         self.assertIn("SecureField::batch_inverse(&denominators)",patched)
+        self.assertIn("let expected_ids = [\"bitwise_xor_8_0\"",patched)
+        self.assertIn("preprocessed_trace.columns.get(index)",patched)
+        self.assertIn("column.gen_column_simd().values.to_cpu()",patched)
+        self.assertIn("S3_LOCAL_PREPROCESS_SOURCE canonical_pinned_original",patched)
+        self.assertIn("base source polynomial exceeds selected component degree",patched)
         self.assertIn("assert_eq!(entries.len(), 131072",patched)
         self.assertIn("zero local LogUp denominator",patched)
         self.assertIn("add_to_relation_entries(component, &view)",patched)
@@ -78,12 +84,24 @@ class Xor8ComponentTests(unittest.TestCase):
         src=instrument_prover(PROVER)
         self.assertEqual(src.count("track_local_verify_bitwise_xor_8_relations"),2)
         self.assertIn("interaction_claim.verify_bitwise_xor_8",src)
+        self.assertIn("&preprocessed_trace,",src)
+        self.assertIn("S3_LOCAL_PREPROCESS_SOURCE",xor_rust())
         self.assertIn(SCOPE_LABEL,src)
         self.assertEqual(src.count("debug_assert_eq!("),2)
         self.assertIn("#[cfg(not(feature = \"relation-tracker\"))]",src)
         tracker=instrument_tracker(TRACKER)
         self.assertTrue(tracker.endswith(xor_rust()))
         self.assertNotIn(LOCAL_RUST,tracker)
+
+    def test_source_preprocessed_columns_have_exact_pin_and_shape(self):
+        code=xor_rust()
+        self.assertEqual(code.count("bitwise_xor_8_0"),1)
+        self.assertEqual(code.count("bitwise_xor_8_1"),1)
+        self.assertEqual(code.count("bitwise_xor_8_2"),1)
+        self.assertIn("assert_eq!(column.log_size(), log_size",code)
+        self.assertIn("expected_ids[slot]",code)
+        self.assertIn("reconstructed[PREPROCESSED_TRACE_IDX][index] = rows",code)
+        self.assertIn("reconstructed[ORIGINAL_TRACE_IDX][index] = rows",code)
 
     def test_changed_upstream_shape_rejected(self):
         with self.assertRaises(ValueError):
@@ -101,6 +119,8 @@ class Xor8ComponentTests(unittest.TestCase):
         self.assertFalse(result["relation_inventory_complete"])
         self.assertEqual(result["raw_relation_entries"],ENTRIES)
         self.assertEqual(result["preprocessed_columns"],3)
+        self.assertEqual(result["preprocessed_trace_source"],
+                         "pinned native original before commitment lifting")
         self.assertEqual(result["base_columns"],2)
         self.assertFalse(result["global_relation_balances_verified"])
         self.assertFalse(result["native_proof_verified"])
@@ -121,6 +141,7 @@ class Xor8ComponentTests(unittest.TestCase):
             ("count=131072","count=4096"),
             (SCOPE_LABEL, SCOPE_LABEL.replace("partial=true","partial=false")),
             ("S3_LOCAL_LOGUP","S3_LOCAL_OTHER"),
+            (PREPROCESS_SOURCE,"S3_LOCAL_PREPROCESS_SOURCE lifted_commitment"),
             ("CommonLookupElements:","OtherRelation:"),
         ]:
             with self.assertRaises(ValueError,msg=before):

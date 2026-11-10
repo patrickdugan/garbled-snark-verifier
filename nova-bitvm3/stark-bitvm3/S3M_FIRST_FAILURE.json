@@ -1,0 +1,42 @@
+{
+  "stage": "S3m first XOR8 native diagnostic: lifted preprocessing polynomial domain mismatch",
+  "code_commit": "4cd07d3d1584bbd171a053ba1dbb96abc451fe90",
+  "trigger_commit": "7c8d261fba02c1c2b0f0ef6f3ddbd132d9ce4022",
+  "run_id": 42764839454,
+  "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42764839454",
+  "source_pins": {
+    "stwo_cairo": "467d5c6d4d6d526c1db8ff69c14f2de6d57f4d73",
+    "stwo": "aeceb74c"
+  },
+  "frozen_prover_input_sha256": "c3c3622b6c10fe54f2efbb9f48d4cbcedb96143b904aa29eaa8fb07e8b65eb55",
+  "native_run": {
+    "returncode": 101,
+    "elapsed_seconds": 21.142,
+    "peak_rss_bytes": 1601064960,
+    "rss_limit_bytes": 4294967296,
+    "failed_assertion": "source polynomial exceeds selected component trace degree",
+    "stage_reached": "S3_RELATIONS_BEGIN",
+    "selected_component": "verify_bitwise_xor_8",
+    "component_trace_rows": 65536,
+    "trace_tuples_emitted": false,
+    "native_global_lookup_assertion_reached": false,
+    "native_proof_verified": false
+  },
+  "cause_under_investigation": "The selected source polynomial is represented on a larger commitment/lifting domain than the fixed 16-log XOR8 component domain. A diagnostic-only reconstruction from the prover's original pinned preprocessing trace is the next controlled attempt.",
+  "next_fix": "Read three XOR8 preprocessing columns from the exact native PreProcessedTrace object passed to the prover; keep committed-polynomial reconstruction for the two base columns.",
+  "artifact": {
+    "id": 13739153977,
+    "digest": "sha256:1186f62b9e7f1fac9790cc0db97c5d25abd91fbec46975a6a733c4d07001e4c1",
+    "url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42764839454/artifacts/13739153977"
+  },
+  "routine_ci": {
+    "components": "success",
+    "tiny_garbling": "success",
+    "upstream_conformance": "success"
+  },
+  "scope": {
+    "native_cairo_proof_verified": false,
+    "bitvm3_stark_verifier_verified": false,
+    "ark_utxoref_authorized": false
+  }
+}

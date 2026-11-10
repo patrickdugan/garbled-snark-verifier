@@ -55,6 +55,55 @@ def xor_rust() -> str:
         "assert_eq!(component.preprocessed_column_indices().len(), 1);",
         "assert_eq!(component.preprocessed_column_indices().len(), 3);",
     )
+    updated = replace_once(
+        updated,
+        """    _public_data: &PublicData,
+    common_lookup: &cairo_air::relations::CommonLookupElements,""",
+        """    _public_data: &PublicData,
+    preprocessed_trace: &stwo_cairo_common::preprocessed_columns::preprocessed_trace::PreProcessedTrace,
+    common_lookup: &cairo_air::relations::CommonLookupElements,""",
+    )
+    old_reconstruction = """    let domain = CanonicCoset::new(log_size).circle_domain();
+    for tree in [PREPROCESSED_TRACE_IDX, ORIGINAL_TRACE_IDX] {
+        for &index in &indices[tree] {
+            let polynomial = source[tree][index];
+            let coeffs = reduce_degree(polynomial.evals.clone().interpolate());
+            assert!(coeffs.log_size() <= log_size,
+                    "source polynomial exceeds selected component trace degree");
+            let rows = coeffs.evaluate(domain).values.to_cpu();
+            assert_eq!(rows.len(), 1usize << log_size);
+            reconstructed[tree][index] = rows;
+        }
+    }"""
+    new_reconstruction = """    let domain = CanonicCoset::new(log_size).circle_domain();
+    // The prover's pinned preprocessed trace is the original source of these
+    // three XOR8 columns. The commitment tree may lift their polynomials onto
+    // a larger domain, so its coefficients cannot be restricted to 16 bits.
+    // Recover the exact canonical 65536-row values directly from the SAME
+    // pinned preprocessed trace that was used to build the commitment.
+    let expected_ids = ["bitwise_xor_8_0", "bitwise_xor_8_1", "bitwise_xor_8_2"];
+    for (slot, &index) in component.preprocessed_column_indices().iter().enumerate() {
+        let column = preprocessed_trace.columns.get(index)
+            .expect("source-pinned XOR8 preprocessing index is out of range");
+        assert_eq!(column.id().id, expected_ids[slot], "wrong XOR8 table column");
+        assert_eq!(column.log_size(), log_size, "wrong source preprocessed domain");
+        let rows = column.gen_column_simd().values.to_cpu();
+        assert_eq!(rows.len(), 1usize << log_size);
+        reconstructed[PREPROCESSED_TRACE_IDX][index] = rows;
+    }
+    eprintln!("S3_LOCAL_PREPROCESS_SOURCE canonical_pinned_original");
+    // Base-trace columns retain the existing committed-polynomial
+    // reconstruction, with exact degree and row-count checks.
+    for &index in &indices[ORIGINAL_TRACE_IDX] {
+        let polynomial = source[ORIGINAL_TRACE_IDX][index];
+        let coeffs = reduce_degree(polynomial.evals.clone().interpolate());
+        assert!(coeffs.log_size() <= log_size,
+                "base source polynomial exceeds selected component degree");
+        let rows = coeffs.evaluate(domain).values.to_cpu();
+        assert_eq!(rows.len(), 1usize << log_size);
+        reconstructed[ORIGINAL_TRACE_IDX][index] = rows;
+    }"""
+    updated = replace_once(updated, old_reconstruction, new_reconstruction)
     old_inversion = """    let mut reconstructed_sum = SecureField::zero();
     for entry in &entries {
         assert_eq!(entry.relation, "CommonLookupElements");
@@ -105,6 +154,14 @@ def instrument_prover(source: str) -> str:
         patched,
         "S3_LOCAL_SCOPE component=range_check_11 partial=true",
         SCOPE_LABEL,
+    )
+    patched = replace_once(
+        patched,
+        """                &commitment_scheme, &component_builder, &claim.public_data,
+                &interaction_elements,""",
+        """                &commitment_scheme, &component_builder, &claim.public_data,
+                &preprocessed_trace,
+                &interaction_elements,""",
     )
     if patched.count("debug_assert_eq!(") != source.count("debug_assert_eq!(") + 1:
         raise ValueError("upstream global lookup assertion changed")
@@ -157,6 +214,9 @@ def prepare(root: Path, output: Path) -> dict:
         "expected_preprocessed_columns":PREPROCESSED,
         "expected_base_columns":BASE,
         "batch_inversion":True,
+        "preprocessed_source":"same pinned PreProcessedTrace object used by native commitment",
+        "base_source":"committed original-trace polynomial evaluation",
+        "preprocessed_row_domain_check":True,
         "source_file_hashes":[{
             "path":path,
             "original_sha256":hashlib.sha256(before.encode()).hexdigest(),
