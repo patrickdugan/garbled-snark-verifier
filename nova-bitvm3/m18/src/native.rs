@@ -226,13 +226,16 @@ pub struct Proof {
 }
 
 /// A leaf with `key` is in the tree under `root`.
+/// The index must be below 2^D: `root_of` reads only its low D bits, so a larger index would
+/// name the same leaf twice.
 pub fn verify_membership(root: &F, key: &F, p: &Proof) -> bool {
-  p.path.siblings.len() == D && p.leaf.key == *key && root_of(p.leaf.hash(), &p.path) == *root
+  p.path.siblings.len() == D && p.path.index < 1 << D && p.leaf.key == *key && root_of(p.leaf.hash(), &p.path) == *root
 }
 
 /// No leaf with `key` is in the tree under `root`: the proven leaf is the key's predecessor.
 pub fn verify_nonmembership(root: &F, key: &F, p: &Proof) -> bool {
   p.path.siblings.len() == D
+    && p.path.index < 1 << D
     && root_of(p.leaf.hash(), &p.path) == *root
     && lt(&p.leaf.key, key)
     && (p.leaf.next_key == F::ZERO || lt(key, &p.leaf.next_key))
@@ -543,14 +546,17 @@ impl UtxoMap {
 }
 
 /// Checks a balance against a root; returns the unspent sum. `script`, when given, must match
-/// every entry. Duplicate entries are refused.
+/// every entry's fingerprint. Duplicate entries are refused. The script match here is by
+/// `script_fp` alone, which is linear in the script bytes: it binds a script fixed before `r_s`
+/// was known (the verifier's own address), not one a prover picks after seeing `r_s`. A claim
+/// whose script comes from the prover goes through [`verify_output`].
 pub fn verify_balance(root: &F, r_s: &F, b: &Balance, script: Option<&[u8]>) -> Result<u64, MapError> {
   let sh = script.map(|s| script_fp(s, *r_s));
   let mut seen = std::collections::HashSet::new();
   let mut sum = 0u64;
   for e in &b.entries {
     let key = outpoint_key(&e.txid, e.vout);
-    if !verify_membership(root, &key, &e.proof) || !seen.insert(e.proof.path.index) {
+    if !verify_membership(root, &key, &e.proof) || !seen.insert(be(&key)) {
       return Err(MapError::BadProof);
     }
     if let Some(s) = sh {
@@ -559,10 +565,39 @@ pub fn verify_balance(root: &F, r_s: &F, b: &Balance, script: Option<&[u8]>) -> 
       }
     }
     if !e.proof.leaf.spent {
-      sum += e.proof.leaf.value;
+      sum = sum.checked_add(e.proof.leaf.value).ok_or(MapError::BadProof)?;
     }
   }
   Ok(sum)
+}
+
+/// A transaction from its non-witness serialization; refuses anything else (a witness
+/// serialization, trailing bytes, the 64-byte length the circuit refuses).
+pub fn parse_nonwit_tx(b: &[u8]) -> Result<Tx, String> {
+  if b.len() == 64 {
+    return Err("64-byte transaction".into());
+  }
+  let mut r = Rd { b, p: 0 };
+  let tx = parse_tx(&mut r)?;
+  if r.p != b.len() || tx.nonwit != b {
+    return Err("not a non-witness transaction serialization".into());
+  }
+  Ok(tx)
+}
+
+/// An output claim: output `vout` of the transaction `tx_nonwit` is in the map under `root`.
+/// The script and value come from the transaction, bound to the leaf by its txid (SHA-256d), and
+/// the leaf's value and fingerprint must agree with them. Returns (value, script, spent).
+pub fn verify_output(root: &F, r_s: &F, tx_nonwit: &[u8], vout: u32, p: &Proof) -> Result<(u64, Vec<u8>, bool), String> {
+  let tx = parse_nonwit_tx(tx_nonwit)?;
+  let out = tx.outputs.get(vout as usize).ok_or("no such output")?;
+  if !verify_membership(root, &outpoint_key(&tx.txid, vout), p) {
+    return Err("membership proof does not verify".into());
+  }
+  if p.leaf.value != out.value || p.leaf.script_fp != script_fp(&out.script, *r_s) {
+    return Err("leaf value or script fingerprint differs from the transaction".into());
+  }
+  Ok((out.value, out.script.clone(), p.leaf.spent))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -811,6 +846,54 @@ mod tests {
     let dup = BalanceEntry { txid: b4.entries[0].txid, vout: b4.entries[0].vout, proof: b4.entries[0].proof.clone() };
     b4.entries.push(dup);
     assert!(verify_balance(&m.root(), &fu(DEFAULT_RS), &b4, Some(&s)).is_err());
+    // The same leaf under an index aliased above 2^D (root_of reads only D bits) fails.
+    let mut b5 = m.balance_of_script(&s);
+    let mut alias = b5.entries[0].proof.clone();
+    assert_eq!(root_of(alias.leaf.hash(), &alias.path), m.root());
+    alias.path.index += 1 << D;
+    assert_eq!(root_of(alias.leaf.hash(), &alias.path), m.root());
+    let (t0, v0) = (b5.entries[0].txid, b5.entries[0].vout);
+    assert!(!verify_membership(&m.root(), &outpoint_key(&t0, v0), &alias));
+    b5.entries.push(BalanceEntry { txid: t0, vout: v0, proof: alias });
+    assert!(verify_balance(&m.root(), &fu(DEFAULT_RS), &b5, Some(&s)).is_err());
+  }
+
+  fn nonwit_tx(prev: u8, outs: &[(u64, &[u8])]) -> Vec<u8> {
+    let mut t = vec![2, 0, 0, 0, 1];
+    t.extend_from_slice(&[prev; 32]);
+    t.extend_from_slice(&[0, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff]);
+    t.push(outs.len() as u8);
+    for (v, s) in outs {
+      t.extend_from_slice(&v.to_le_bytes());
+      t.push(s.len() as u8);
+      t.extend_from_slice(s);
+    }
+    t.extend_from_slice(&[0, 0, 0, 0]);
+    t
+  }
+
+  #[test]
+  fn output_claim_binds_script_by_txid() {
+    let r_s = fu(DEFAULT_RS);
+    let script = [0x00u8, 0x14, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7];
+    let tx = nonwit_tx(3, &[(5_000, &[0x51]), (940_000, &script)]);
+    let id = sha256d(&tx);
+    let mut m = UtxoMap::with_rs(r_s);
+    m.create(&id, 0, 5_000, &[0x51]).unwrap();
+    m.create(&id, 1, 940_000, &script).unwrap();
+    let p = m.membership(&id, 1).unwrap();
+    let (v, s, spent) = verify_output(&m.root(), &r_s, &tx, 1, &p).unwrap();
+    assert_eq!((v, s.as_slice(), spent), (940_000, &script[..], false));
+    // Another script in the claimed transaction changes its txid, so the leaf no longer matches.
+    let mut other = script;
+    other[5] ^= 1;
+    let forged = nonwit_tx(3, &[(5_000, &[0x51]), (940_000, &other)]);
+    assert!(verify_output(&m.root(), &r_s, &forged, 1, &p).is_err());
+    // The wrong output index, a witness serialization or trailing bytes are refused.
+    assert!(verify_output(&m.root(), &r_s, &tx, 0, &p).is_err());
+    let mut trailing = tx.clone();
+    trailing.push(0);
+    assert!(verify_output(&m.root(), &r_s, &trailing, 1, &p).is_err());
   }
 
   #[test]

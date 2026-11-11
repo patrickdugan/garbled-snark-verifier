@@ -5,3 +5,4 @@ pub mod cost;
 pub mod elem;
 pub mod machine;
 pub mod native;
+pub mod segment;

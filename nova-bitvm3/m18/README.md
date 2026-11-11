@@ -44,8 +44,14 @@ of Pallas, hashed with Poseidon:
   (script length, byte 0, byte 1, ...), starting from 0, where
   `r_s = Poseidon(1, hash(H−1)_lo, hash(H−1)_hi, hash(T)_lo, hash(T)_hi)` over the 16-byte
   little-endian limbs of the internal-order hashes. The block hashes fix every script in the
-  window before `r_s` exists, so two different scripts collide with probability at most
-  (length)/|F|. A balance query recomputes `script_fp` of its script with the window's `r_s`.
+  window before `r_s` exists, so two window scripts collide with probability at most
+  (length)/|F|, and so does a window script with a script fixed before `r_s` was known (a
+  verifier's own address). The fingerprint is linear in the script bytes, so it does not bind a
+  script picked after `r_s` is public: from about 34 free bytes on, lattice reduction finds a
+  second byte string with a given fingerprint. A balance claim therefore carries the output's
+  transaction (non-witness serialization); the verifier hashes it to the txid that keys the
+  leaf and reads the script and value from it (`native::verify_output`), so the script is bound
+  by SHA-256d, and the leaf's value and `script_fp` must agree with it.
 
 Operations, one per event:
 - **create** (an output): a non-membership proof for k (the low leaf has `key < k < next_key`),
@@ -230,6 +236,39 @@ NEW, close) packing a close, an open and one op into a step. At HDR3 the produce
 until the consumer's queue holds at most the final close, so a block takes
 max(compressions, leaf updates) steps plus a few.
 
+## Segmented folding and the verifier
+
+One process folds at 1.4 to 2.2 s per step on the laptop whatever its thread count (the step is
+MSM-bound and the machine is shared), so a window is split into segments folded side by side.
+Every field of the state is in z, so a segment can start at any step: segment i+1's z0 is
+segment i's zn. Commands (`src/segment.rs`, `src/main.rs`, `scripts/fold-window.sh`):
+- `m18 trace <data> <first> <last> <segment-steps> <work> [m16-public.bin]`: runs the window
+  natively, writes each segment's witnesses (`seg-i.wit`, fixed 1,066-byte records), z0 and
+  expected zn, `manifest.json`, and with the M16 statement `balance.json` (the PAY1 output and
+  every window output paying its script, each with its transaction and membership path);
+- `m18 params <work>`: the public parameters, once, shared by every segment (`pp.bin`);
+- `m18 check-trace <work> <m16-public.bin>`: the post-proof checks below on the traced states;
+- `m18 fold-seg <work> <i> <every>`: folds segment i, checkpointing the RecursiveSNARK every
+  `every` steps (bincode, written by rename) and resuming from the checkpoint after an
+  interruption; verifies the RecursiveSNARK against the traced zn;
+- `m18 compress-seg <work> <i>`: the segment's CompressedSNARK, verified;
+- `m18 verify-window <work> [m16-public.bin] [--vk-sha256=<hex>]`: the verifier.
+
+The verifier accepts a window when:
+1. the verifier key is rebuilt from `M18Step` (or is a `vk.bin` whose SHA-256 the caller pins);
+2. every segment's CompressedSNARK verifies with its z0;
+3. the first z0 equals the window's initial state recomputed from hash(H−1) and H, every field
+   compared, `r_s` and `r` excepted (the seal fixes them);
+4. each segment's z0 equals the previous segment's zn;
+5. the last zn is sealed, with `h0`, `r_s` and `r` unchanged since z0.
+
+With the M16 statement (its wrap proof checked separately by `m13-verify`), it also requires the
+statement to be mainnet (NHC1), hash(T) to equal the statement's tip hash (zn[1], zn[2], the same
+limb encoding) and T to equal its tip height, and then checks each balance entry: the transaction
+hashes to the txid of the leaf's key, the output's script is the PAY1 script (SHA-256), the
+leaf's value and `script_fp` agree with the output, the membership path verifies with an index
+below 2^20, no outpoint counts twice, and the PAY1 output is unspent with the PAY1 value.
+
 ## Status
 
 Built (2026-11-11). The first window is mainnet 975,067..975,072, the six blocks under M16's
@@ -247,7 +286,7 @@ inside the M16 payment input.
   `lt_bit`, `path_root`, the Poseidon sponge and the SHA-256 state packing) and the cost-model
   step.
 
-Reproduce: `scripts/cargo.sh test --release` (22 tests, one ignored), `... test --release --lib -- --ignored`
+Reproduce: `scripts/cargo.sh test --release` (25 tests, one ignored), `... test --release --lib -- --ignored`
 (the full window, needs the raw blocks), then `m18 run`, `m18 cost`, `m18 fold-window` and
 `m18 fold`. Raw blocks come from mempool.space into a data directory (not committed) and are
 pinned by `fixtures/blocks.json` (heights, hashes, sizes, SHA-256); `fold-window` takes
@@ -318,8 +357,29 @@ average 12 to 19):
 At 51,404 constraints per step the measured rate is 2.23 s per step on the loaded machine, below
 the 3.05 s per step the earlier model gave for its 251,160-constraint uniform step. A block now
 takes 37,465 steps on average, not the model's 20,304 (a create is two leaf updates, and the
-compressions set the pace), so the window of 224,790 steps comes to about 139 hours of folding,
-against the model's 103 hours.
+compressions set the pace), so the window of 224,790 steps comes to about 139 hours of folding
+in one process, against the model's 103 hours. It is folded in segments instead (below).
+
+Segmented, blocks 170 and 171 (`results/segmented-170-171.json`): `m18 trace` with 10-step
+segments (10, 10, 3 steps), one `pp.bin` (72,704,152 bytes, digest `2a19124c…3101`, primary
+70,617 constraints with the Nova augmentation, secondary 10,349), each segment folded by its own
+`fold-seg` process and verified against the traced zn, then compressed (13,800 bytes each,
+34 to 91 s of proving). `verify-window` accepts the three proofs and the chaining with the
+verifier key rebuilt from the circuit (SHA-256 `a259c50c…1939`, equal to the `vk.bin` the
+prover wrote) and ends at root `5fde007a…8a1f`, the single-process root. Refused: a z0 with one
+byte changed (segment 2 does not start where segment 1 ended), and a wrong `--vk-sha256` pin.
+Resume: segment 1 killed after its step-3 checkpoint restarted at step 3 and reached the traced
+zn, and its CompressedSNARK verifies.
+
+Window 975,067..975,072, traced (`results/trace-975067-975072.json`, 1,743 s native): 224,790
+steps in 8 segments of 28,099 steps (the last 28,097), 29.95 MB of witnesses each, final root
+`7e18b083…2d1c` with 74,593 leaves. `m18 check-trace` on the traced states: the window starts at
+the initial state for hash(975,066) and height 975,067, the segments chain, the last state is
+sealed, hash(T) and T = 975,072 equal the tip of the M16 statement `cae6068f…c869`, and the
+PAY1 output `a652ab0c…0045:0` verifies from its transaction and membership path
+(`results/balance-975067-975072.json`, leaf 8): unspent, 940,000 sats, the only window output
+paying its script. The fold runs as 8 processes of 2 threads each (`scripts/fold-window.sh`,
+checkpoint every 250 steps).
 
 The earlier bench step (c compressions plus one create at depth 32, `m18 fold`,
 `results/fold-timing*.json`, `results/cost-model.json`, `scripts/cost_model.py`) stays as the
