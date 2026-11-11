@@ -1,0 +1,39 @@
+[package]
+name = "stwo-bitvm3-s4-cairo"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-only"
+description = "Measures the Boolean size of the pinned Cairo circuit verifier template; no proof, no garbling"
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+sha2 = "0.10"
+hex = "0.4"
+stwo-bitvm3-core = { path = "../core" }
+stwo-bitvm3-lowering = { path = "../lowering" }
+stwo-bitvm3-upstream = { path = "../upstream" }
+privacy-circuit-verify = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+circuit-cairo-verifier = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+circuits = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+circuit-verifier = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+circuits-stark-verifier = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+stwo = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02", default-features = false, features = ["std"] }
+num-traits = "0.2"
+circuit-serialize = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+circuit-prover = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02", features = ["test-utils"] }
+serde_json = "1"
+privacy_common = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+
+[dev-dependencies]
+stwo-bitvm3-lowering = { path = "../lowering", features = ["test-utils"] }
+
+[profile.dev]
+opt-level = 2
+debug = 0
+incremental = false
+
+[profile.release]
+debug = 0

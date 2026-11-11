@@ -67,6 +67,10 @@ on:
         description: 'One native proof of the frozen trace with its public segment context corrected'
         type: boolean
         default: false
+      s4_verifier_circuit:
+        description: 'Size the pinned Stwo circuit verifiers and check the committed production-sized proof through the Boolean lowering'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -595,4 +599,63 @@ jobs:
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/small-profile-*.patch
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/no-pedersen-*.txt
             nova-bitvm3/stark-bitvm3/s3-shinigami/out/no-pedersen-*.json
+          if-no-files-found: warn
+  s4-verifier-circuit:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.s4_verifier_circuit) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[s4-check]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: '4'
+      CARGO_INCREMENTAL: '0'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-01-15
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nova-bitvm3/stark-bitvm3/s4-cairo
+          cache-on-failure: true
+      - name: Build and unit-test the verifier-circuit lab
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          cargo +nightly-2026-01-15 build --release --locked 2>&1 | tail -3
+          cargo +nightly-2026-01-15 test --release --locked 2>&1 | tee out/unit-tests.txt | grep -E "^test |test result"
+      - name: Check the committed production-sized proof and size the circuit verifiers
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIX=$(find "$HOME/.cargo/git/checkouts" -type d -path '*/e9a38e1*/test_data/multiverifier' | head -1)
+          test -n "$FIX"
+          sha256sum "$FIX/proof_cairo.bin" | tee out/fixture-sha256.txt
+          BIN=target/release/stwo-bitvm3-s4-cairo
+          /usr/bin/time -v timeout --kill-after=5s 600s "$BIN" check "$FIX" 2>&1 | tee out/check.txt
+          /usr/bin/time -v timeout --kill-after=5s 900s "$BIN" final-fixture --analytic 2>&1 | tee out/final-fixture.txt
+          /usr/bin/time -v timeout --kill-after=5s 900s "$BIN" final --analytic 2>&1 | tee out/final.txt
+          /usr/bin/time -v timeout --kill-after=5s 900s "$BIN" cairo --analytic 2>&1 | tee out/cairo.txt
+      - name: Publish compact verifier-circuit evidence as annotations
+        if: always()
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          join() { paste -sd'|' | sed 's/|/ | /g'; }
+          echo "::notice title=S4 acceptance::$(grep -E '^check: (native|program|Boolean)' out/check.txt | join)"
+          echo "::notice title=S4 mutations::$(grep -E '^check: (mutation|noncanonical)' out/check.txt | join)"
+          echo "::notice title=S4 check resources::$(grep -E 'Maximum resident|Elapsed' out/check.txt | sed 's/^\s*//' | join)"
+          for n in final-fixture final cairo; do
+            echo "::notice title=S4 template $n::$(grep -E 'program:|boolean|permutation widest|cairo config|Maximum resident|Elapsed' out/$n.txt | sed 's/^\s*//' | join)"
+          done
+          echo "::notice title=S4 unit tests::$(grep -E '^test |test result' out/unit-tests.txt | join)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stwo-s4-verifier-circuit-${{ github.sha }}
+          path: nova-bitvm3/stark-bitvm3/s4-cairo/out/
           if-no-files-found: warn
