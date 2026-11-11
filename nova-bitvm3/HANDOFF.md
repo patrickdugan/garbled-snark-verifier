@@ -64,6 +64,22 @@ Repo `patrickdugan/zk-rusto-no-bitcoino`, path `integrations/bitvm3-nova`. Mirro
 pin table next to NHT4, and add a CI job that builds the M16 ELF and checks its hash. Done when
 the mirror builds in CI and the pin test passes.
 
+Status: pin and CI job done; the ELF hash check fails and needs a decision.
+- Mainnet (NHC1) k = 1 pinned in `m12/native/src/pins.rs` (`M12_PINNED_KEYS`; the upstream table at
+  de607d3 held only mainnet k = 10 and testnet4 k = 5, 10). New `m12/native/tests/pins.rs`: accepted for
+  mainnet k = 1, refused for testnet4 and for k = 2, 5, 10, 20, and other keys refused for mainnet k = 1.
+  Run in WSL: 3 passed; `k1_key_rebuilds_to_its_pin` still passes. zk-rusto 99b23f7, this repo b72508f.
+- CI job `.github/workflows/bitvm3-nova-m16-elf.yml` (SP1 v6.9.0 via sp1up, protoc, `m16-nova-spv-script elf`):
+  zk-rusto runs 42956307446, 42957698722, 42959382930, 42961666740 (c204d4a through 3a371d7). The build
+  succeeds; the runner's ELF is 1,239,848 bytes with SHA-256 `789aa6c9569e195ff51694faaf94bbf7313cc757ee737132a615dffcbe8d4240`,
+  identical on every run, against the pinned `bb7d51b0...`. Same cargo-prove (b8387fa) and rustc 1.96.0-dev as the
+  WSL build. The pin is unchanged.
+- Cause: the guest build is not byte-stable. Two builds in WSL from the same clean checkout at same-length
+  paths gave 1,239,848 bytes (`ae19737f...`) and 1,240,008 bytes (`066bd5e2...`); neither equals `bb7d51b0...`.
+  The differences are code bytes only (the non-path string sets match). The README's ELF hash needs a
+  reproducible build (single codegen unit or a fixed build container) before CI can pin it.
+
+
 ### 2. UTXO-Ref / KeyAgentNet: payment-gated release
 Repo `patrickdugan/UTXO-Ref` (branch `research/keyagentnet-distributed-v01`). The distributed
 signer releases a signature only on a valid M16 statement whose payment pays a script the
