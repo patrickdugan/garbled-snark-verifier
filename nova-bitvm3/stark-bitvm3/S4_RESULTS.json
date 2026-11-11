@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "stage": "S4 Stwo circuit verifier through the Boolean lowering",
-  "code_commit": "762cd77",
+  "code_commit": "2f67df3",
   "base_head": "67801a9",
   "source_pins": {
     "proving": "e9a38e12d09979f7a8625e233a80fecac6c38f02",
@@ -163,7 +163,17 @@
     "templates_match_local_exactly": true,
     "unit_tests": "1 passed",
     "artifact": "stwo-s4-verifier-circuit-762cd77aedf312fd3681abe50be673446d3fc7b3",
-    "artifact_zip_digest": "sha256:b04e2811fe0daec73e2dbdb9355db99f9f4696d21c953bb7c73e810c75de23b7"
+    "artifact_zip_digest": "sha256:b04e2811fe0daec73e2dbdb9355db99f9f4696d21c953bb7c73e810c75de23b7",
+    "reruns": [
+      {
+        "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42949797073",
+        "commit": "2f67df3",
+        "result": "success",
+        "note": "after the check refactor; identical counts, acceptance and mutation verdicts; check 117.6 s on 4 threads, 640 MB",
+        "artifact": "stwo-s4-verifier-circuit-2f67df392748518a4166678656e167676f87da57",
+        "artifact_zip_digest": "sha256:e2b1601ee5169e43fd85c691f880bb475101d42d44595968c92af642415cefcd"
+      }
+    ]
   },
   "not_established": [
     "Shinigami proved under the privacy bootloader (does not fit the pinned profiles)",
