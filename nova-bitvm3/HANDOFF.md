@@ -5,12 +5,12 @@ brief is meant to start its own session; the session reads this file first.
 
 ## What exists
 
-| Piece | Where | State (2026-11-10) |
+| Piece | Where | State (2026-11-11) |
 | --- | --- | --- |
 | Nova header chain (NHC1 mainnet, NHT4 testnet4), genesis-anchored, k = 1 | `zk-rusto-no-bitcoino` (`nova-chain`) | testnet4 to 158,970 proven; mainnet 0–975,072 proven in two shards |
 | Guest A: Nova verify inside SP1 | [`m12`](m12), raw keys in [`m15`](m15) | 21.2 × 10^9 instructions with raw keys, statement unchanged |
-| M16 guest: chain + SPV payment | [`m16`](m16) | mainnet tip 975,072 with a payment at 975,067 executed: 34.1 × 10^9 instructions, statement `cae6068f…c869`, 13/13 mutations refused; GPU proof not yet run |
-| GPU prover | [`prover-gpu`](prover-gpu) | guest A proved on the laptop GPU (03c56e6) |
+| M16 guest: chain + SPV payment | [`m16`](m16) | mainnet tip 975,072 with a payment at 975,067 executed: 34.1 × 10^9 instructions, statement `cae6068f…c869`, 13/13 mutations refused; proved on the GPU, wrapped, and accepted by the M14 circuit plain and garbled (final proof `m13/fixtures/m16-wrap-blake3-v2.bin`) |
+| GPU prover | [`prover-gpu`](prover-gpu) | guest A (03c56e6) and the M16 mainnet guest proved on the laptop GPU |
 | SP1 wrap verifier, native, BLAKE3 transcript v2 | [`m13/verify`](m13/verify) | pins in [`m13/pins.json`](m13/pins.json) |
 | Final verifier as a garbled circuit | [`m14`](m14) | 785,442,492 non-free gates, garbled and evaluated on real proofs |
 | Bitcoin Script (legacy, P2SH, witness v0) as a Nova step, from Shinigami's engine | [`m17`](m17) | 6,808 constraints per step; native engine agrees with Core on all 2,756 non-Taproot vectors; signature, hash and locktime checks deferred to a native claim checker |
@@ -39,8 +39,9 @@ Pins:
 - mainnet k = 1 key: compressed `6aa50d09…da1d`, raw `4e815db8…7615`;
 - testnet4 k = 1 key: compressed `6894f490…c12a`, raw `63f91f1e…d20e`;
 - M16 ELF `bb7d51b0…` (rebuild with [`m16/scripts/build.sh`](m16/scripts/build.sh));
-- M16 mainnet statement (tip 975,072, payment at 975,067) `cae6068f…c869`, from the CPU execution;
-  the proof of it is not yet run.
+- M16 program key `dfc68a5d…cb60` (in [`m13/pins.json`](m13/pins.json));
+- M16 mainnet statement (tip 975,072, payment at 975,067) `cae6068f…c869`, proved: final proof
+  and statement in [`m13/fixtures`](m13/fixtures/README.md) (`m16-*`).
 
 Costs to budget: about 5 GPU hours per mainnet M16 proof (two segments) on the laptop; extending
 an existing chain proof is `nova-chain resume` at about 5 headers/s per process plus one GPU run;
