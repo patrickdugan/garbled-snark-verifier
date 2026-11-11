@@ -1,5 +1,7 @@
 use m18_utxo_window::cost::*;
 use m18_utxo_window::elem::{f_to_le, fu, F};
+use m18_utxo_window::circuit::M18Step;
+use m18_utxo_window::machine::{run_window, State, StepWitness, NZ};
 use m18_utxo_window::native::*;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -74,8 +76,6 @@ fn run(dir: &str, fix: &str, m16: &str, out: &str) {
   let fx: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(fix).unwrap()).unwrap();
   let prev = unhex_rev(fx["previous_block"]["hash"].as_str().unwrap());
   let t0 = Instant::now();
-  let mut w = Window::new(prev, true);
-  let mut stats = vec![];
   let mut raws = vec![];
   for b in fx["blocks"].as_array().unwrap() {
     let h = b["height"].as_u64().unwrap();
@@ -83,13 +83,20 @@ fn run(dir: &str, fix: &str, m16: &str, out: &str) {
     if hex::encode(Sha256::digest(&raw)) != b["raw_sha256"].as_str().unwrap() {
       die(&format!("raw file of {h} does not match the fixture"));
     }
-    let st = w.process_block(h, &raw).unwrap_or_else(|e| die(&e));
+    raws.push(raw);
+  }
+  let last_hash = sha256d(&raws.last().unwrap()[..80]);
+  let r_s = derive_r_s(&prev, &last_hash);
+  let mut w = Window::new(prev, r_s, true);
+  let mut stats = vec![];
+  for (b, raw) in fx["blocks"].as_array().unwrap().iter().zip(&raws) {
+    let h = b["height"].as_u64().unwrap();
+    let st = w.process_block(h, raw).unwrap_or_else(|e| die(&e));
     if st.hash != b["hash"].as_str().unwrap() {
       die(&format!("block {h} hash differs from the fixture"));
     }
     eprintln!("{h}: {} txs, {} creates, {} in-window spends, {:.1} s", st.transactions, st.creates, st.spends_in_window, st.seconds);
     stats.push(st);
-    raws.push(raw);
   }
   let wall = t0.elapsed().as_secs_f64();
   let root = w.map.root();
@@ -117,7 +124,7 @@ fn run(dir: &str, fix: &str, m16: &str, out: &str) {
     }),
   };
   let bal = w.map.balance_of_script(&script);
-  let bal_sum = verify_balance(&root, &bal, Some(&script)).unwrap_or_else(|e| die(&format!("balance proof: {e:?}")));
+  let bal_sum = verify_balance(&root, &r_s, &bal, Some(&script)).unwrap_or_else(|e| die(&format!("balance proof: {e:?}")));
   assert_eq!(bal_sum, bal.unspent_sum);
   let entries: Vec<_> = bal
     .entries
@@ -131,7 +138,7 @@ fn run(dir: &str, fix: &str, m16: &str, out: &str) {
     .collect();
   let sum = |f: fn(&BlockStats) -> u64| stats.iter().map(f).sum::<u64>();
   let doc = json!({
-    "window": {"first": 975_067, "last": 975_072, "previous_hash": display_hex(&prev)},
+    "window": {"first": 975_067, "last": 975_072, "previous_hash": display_hex(&prev), "r_s_le_hex": hex::encode(f_to_le(&r_s))},
     "blocks": stats,
     "totals": {
       "transactions": sum(|s| s.transactions), "nonwitness_bytes": sum(|s| s.nonwitness_bytes),
@@ -246,6 +253,7 @@ fn cost(out: &str) {
     "map_create": create_n, "map_spend_in_window": spend_n, "map_nonmember_before_window": non_n,
     "create_gadget_satisfied_and_root_matches_native": true,
     "false_before_window_claim_unsatisfiable": true,
+    "m18_step_constraints": m18_utxo_window::circuit::step_constraints(),
     "bench_step_constraints_by_c": step.iter().map(|(c, n)| json!({"c": c, "constraints": n})).collect::<Vec<_>>(),
   });
   std::fs::write(out, serde_json::to_string_pretty(&doc).unwrap() + "\n").unwrap();
@@ -330,17 +338,100 @@ fn fold(steps: usize, cs: &[usize], out: &str) {
   std::fs::write(out, serde_json::to_string_pretty(&json!({"rows": rows})).unwrap() + "\n").unwrap();
 }
 
+
+type PpM = nova_snark::nova::PublicParams<E1, E2, M18Step>;
+type RsM = nova_snark::nova::RecursiveSNARK<E1, E2, M18Step>;
+type CsM = nova_snark::nova::CompressedSNARK<E1, E2, M18Step, S1, S2>;
+
+/// fold-window <data-dir> <first-height> <last-height> <out.json>: folds every step of a real
+/// window (`<h>.raw` for each height, `<first-1>.hash` the display hash of the block before),
+/// verifies the recursive SNARK, then proves and verifies a CompressedSNARK.
+fn fold_window(dir: &str, first: u64, last: u64, out: &str) {
+  use nova_snark::traits::snark::RelaxedR1CSSNARKTrait;
+  let prev_hex = std::fs::read_to_string(format!("{dir}/{}.hash", first - 1)).unwrap_or_else(|_| die("previous block hash file missing"));
+  let prev = unhex_rev(prev_hex.trim());
+  let raws: Vec<Vec<u8>> = (first..=last).map(|h| std::fs::read(format!("{dir}/{h}.raw")).unwrap_or_else(|_| die(&format!("{h}.raw missing")))).collect();
+  let mut wits: Vec<StepWitness> = vec![];
+  let mut z0: Option<Vec<F>> = None;
+  let t = Instant::now();
+  let rs = run_window(&raws, prev, first, &mut |_, s, w, _| {
+    if z0.is_none() {
+      z0 = Some(s.to_vec());
+    }
+    wits.push(w.clone());
+    Ok(())
+  })
+  .unwrap_or_else(|e| die(&e));
+  let native_seconds = t.elapsed().as_secs_f64();
+  let z0 = z0.unwrap();
+  let steps = wits.len();
+  let n_cons = m18_utxo_window::circuit::step_constraints();
+  eprintln!("{steps} steps, {n_cons} constraints per step, native run {native_seconds:.2} s");
+
+  let t = Instant::now();
+  let pp = PpM::setup(&M18Step::blank(), &*S1::ck_floor(), &*S2::ck_floor()).unwrap();
+  let setup = t.elapsed().as_secs_f64();
+  eprintln!("public params {setup:.1} s");
+  let t = Instant::now();
+  let mut snark = RsM::new(&pp, &M18Step { w: wits[0].clone() }, &z0).unwrap();
+  let mut times = vec![];
+  for (i, w) in wits.iter().enumerate() {
+    let ts = Instant::now();
+    snark.prove_step(&pp, &M18Step { w: w.clone() }).unwrap_or_else(|e| die(&format!("prove_step {i}: {e:?}")));
+    times.push(ts.elapsed().as_secs_f64());
+  }
+  let total = t.elapsed().as_secs_f64();
+  let t = Instant::now();
+  let zn = snark.verify(&pp, steps, &z0).unwrap_or_else(|e| die(&format!("verify: {e:?}")));
+  let verify = t.elapsed().as_secs_f64();
+  let want = rs.state.to_vec();
+  if zn != want {
+    die("folded output differs from the native final state");
+  }
+  let fin = State::from_vec(&zn).unwrap();
+  assert!(fin.sealed, "window not sealed");
+  assert_eq!(fin.root, rs.map.root(), "folded root differs from the native map root");
+  eprintln!("recursive verify {verify:.2} s, sealed, root {}", hex::encode(f_to_le(&fin.root)));
+
+  let t = Instant::now();
+  let (pk, vk) = CsM::setup(&pp).unwrap();
+  let c_setup = t.elapsed().as_secs_f64();
+  let t = Instant::now();
+  let proof = CsM::prove(&pp, &pk, &snark).unwrap_or_else(|e| die(&format!("compressed prove: {e:?}")));
+  let c_prove = t.elapsed().as_secs_f64();
+  let bytes = bincode::serialize(&proof).unwrap().len();
+  let t = Instant::now();
+  let zc = proof.verify(&vk, steps, &z0).unwrap_or_else(|e| die(&format!("compressed verify: {e:?}")));
+  let c_verify = t.elapsed().as_secs_f64();
+  assert_eq!(zc, want);
+  let steady: f64 = times[1..].iter().sum::<f64>() / (times.len() - 1).max(1) as f64;
+  let doc = json!({
+    "window": {"first": first, "last": last, "previous_hash": display_hex(&prev), "last_hash": display_hex(&sha256d(&raws.last().unwrap()[..80]))},
+    "steps": steps, "step_constraints": n_cons, "state_length": NZ,
+    "blocks": rs.blocks.iter().map(|b| json!({"height": b.height, "steps": b.steps, "compressions": b.compressions, "leaf_updates": b.leaf_updates, "idle_steps": b.idle_steps, "transactions": b.transactions})).collect::<Vec<_>>(),
+    "public_params_seconds": setup, "recursive_prove_seconds": total, "first_step_seconds": times[0],
+    "seconds_per_step_steady": steady, "recursive_verify_seconds": verify,
+    "compressed_setup_seconds": c_setup, "compressed_prove_seconds": c_prove, "compressed_verify_seconds": c_verify,
+    "compressed_bytes": bytes,
+    "sealed": true, "final_root_le_hex": hex::encode(f_to_le(&fin.root)), "final_root_matches_native": true,
+    "leaves": fin.leaf_count, "r_s_le_hex": hex::encode(f_to_le(&fin.r_s)), "r_le_hex": hex::encode(f_to_le(&fin.r)),
+    "step_seconds": times,
+  });
+  std::fs::write(out, serde_json::to_string_pretty(&doc).unwrap() + "\n").unwrap();
+  println!("{}", serde_json::to_string_pretty(&doc).unwrap());
+}
 fn main() {
   let a: Vec<String> = std::env::args().collect();
   match a.get(1).map(|s| s.as_str()) {
     Some("fixtures") => fixtures(&a[2], &a[3]),
     Some("run") => run(&a[2], &a[3], &a[4], &a[5]),
     Some("cost") => cost(&a[2]),
+    Some("fold-window") => fold_window(&a[2], a[3].parse().unwrap(), a[4].parse().unwrap(), &a[5]),
     Some("fold") => {
       let cs: Vec<usize> = a[3].split(',').map(|x| x.parse().unwrap()).collect();
       fold(a[2].parse().unwrap(), &cs, &a[4])
     }
-    _ => die("usage: m18 fixtures|run|cost|fold ..."),
+    _ => die("usage: m18 fixtures|run|cost|fold|fold-window ..."),
   }
   let _: Option<F> = None;
 }

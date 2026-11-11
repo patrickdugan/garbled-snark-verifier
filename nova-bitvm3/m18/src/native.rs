@@ -8,7 +8,10 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 
-pub const D: usize = 32;
+pub const D: usize = 20;
+
+/// The script-fingerprint challenge used when a map is built without a window (unit tests).
+pub const DEFAULT_RS: u64 = 0x5eed_0001;
 
 pub fn sha256d(b: &[u8]) -> [u8; 32] {
   Sha256::digest(Sha256::digest(b)).into()
@@ -164,13 +167,13 @@ pub struct Leaf {
   pub next_key: F, // 0 for the last leaf (no successor)
   pub next_index: u64,
   pub value: u64,
-  pub script_hash: F,
+  pub script_fp: F,
   pub spent: bool,
 }
 
 impl Leaf {
   pub fn hash(&self) -> F {
-    hash(&[self.key, self.next_key, fu(self.next_index), fu(self.value), self.script_hash, fu(self.spent as u64)])
+    hash(&[self.key, self.next_key, fu(self.next_index), fu(self.value), self.script_fp, fu(self.spent as u64)])
   }
 }
 
@@ -179,11 +182,25 @@ pub fn outpoint_key(txid: &[u8; 32], vout: u32) -> F {
   low248(&hash(&[f_from_le(&txid[..16]), f_from_le(&txid[16..]), fu(vout as u64)]))
 }
 
-/// Poseidon(script bytes packed 31 per element, length).
-pub fn script_hash(script: &[u8]) -> F {
-  let mut xs: Vec<F> = script.chunks(31).map(f_from_le).collect();
-  xs.push(fu(script.len() as u64));
-  hash(&xs)
+/// Horner evaluation at `r_s` of (script length, byte 0, byte 1, ...), starting from 0.
+pub fn script_fp(script: &[u8], r_s: F) -> F {
+  let mut f = fu(script.len() as u64);
+  for b in script {
+    f = f * r_s + fu(*b as u64);
+  }
+  f
+}
+
+/// The two 16-byte little-endian limbs of an internal-order hash.
+pub fn limbs(h: &[u8; 32]) -> [F; 2] {
+  [f_from_le(&h[..16]), f_from_le(&h[16..])]
+}
+
+/// `r_s = Poseidon(1, hash(H-1)_lo, hash(H-1)_hi, hash(T)_lo, hash(T)_hi)`, hashes in internal
+/// byte order.
+pub fn derive_r_s(h0: &[u8; 32], ht: &[u8; 32]) -> F {
+  let (a, b) = (limbs(h0), limbs(ht));
+  hash(&[fu(1), a[0], a[1], b[0], b[1]])
 }
 
 #[derive(Clone, Debug)]
@@ -253,7 +270,7 @@ impl CreateProof {
     let n = &self.new_leaf;
     let ok = u.key == l.key
       && u.value == l.value
-      && u.script_hash == l.script_hash
+      && u.script_fp == l.script_fp
       && u.spent == l.spent
       && u.next_key == self.key
       && u.next_index == self.append.index
@@ -332,6 +349,7 @@ pub struct UtxoMap {
   by_key: BTreeMap<[u8; 32], u64>, // key, big-endian bytes -> leaf index
   by_script: HashMap<[u8; 32], Vec<u64>>,
   outpoints: Vec<([u8; 32], u32)>, // per leaf index (sentinel: zeros)
+  r_s: F,
 }
 
 fn be(k: &F) -> [u8; 32] {
@@ -348,6 +366,10 @@ impl Default for UtxoMap {
 
 impl UtxoMap {
   pub fn new() -> Self {
+    Self::with_rs(fu(DEFAULT_RS))
+  }
+
+  pub fn with_rs(r_s: F) -> Self {
     let mut empty = vec![F::ZERO];
     for l in 0..D {
       empty.push(hash(&[empty[l], empty[l]]));
@@ -359,9 +381,10 @@ impl UtxoMap {
       by_key: BTreeMap::new(),
       by_script: HashMap::new(),
       outpoints: vec![],
+      r_s,
     };
     // Sentinel: key 0, no successor. No real key is 0 (its probability is 2^-248).
-    let s = Leaf { key: F::ZERO, next_key: F::ZERO, next_index: 0, value: 0, script_hash: F::ZERO, spent: false };
+    let s = Leaf { key: F::ZERO, next_key: F::ZERO, next_index: 0, value: 0, script_fp: F::ZERO, spent: false };
     m.set_leaf(0, s);
     m.by_key.insert(be(&F::ZERO), 0);
     m.outpoints.push(([0; 32], 0));
@@ -444,7 +467,7 @@ impl UtxoMap {
       return Err(MapError::Full);
     }
     let root_before = self.root();
-    let sh = script_hash(script);
+    let sh = script_fp(script, self.r_s);
     let mut low_updated = low.leaf.clone();
     low_updated.next_key = key;
     low_updated.next_index = new_idx;
@@ -452,7 +475,7 @@ impl UtxoMap {
     let root_mid = self.root();
     let append = self.path(new_idx);
     let new_leaf =
-      Leaf { key, next_key: low.leaf.next_key, next_index: low.leaf.next_index, value, script_hash: sh, spent: false };
+      Leaf { key, next_key: low.leaf.next_key, next_index: low.leaf.next_index, value, script_fp: sh, spent: false };
     self.set_leaf(new_idx, new_leaf.clone());
     self.by_key.insert(be(&key), new_idx);
     self.by_script.entry(f_to_le(&sh)).or_default().push(new_idx);
@@ -511,7 +534,7 @@ impl UtxoMap {
   /// Balance of a script: every map entry paying it (spent ones included, with their flag) and
   /// the sum of the unspent ones.
   pub fn balance_of_script(&self, script: &[u8]) -> Balance {
-    let sh = script_hash(script);
+    let sh = script_fp(script, self.r_s);
     let idxs = self.by_script.get(&f_to_le(&sh)).cloned().unwrap_or_default();
     let entries: Vec<BalanceEntry> = idxs.iter().map(|&i| self.entry(i)).collect();
     let unspent_sum = entries.iter().filter(|e| !e.proof.leaf.spent).map(|e| e.proof.leaf.value).sum();
@@ -521,8 +544,8 @@ impl UtxoMap {
 
 /// Checks a balance against a root; returns the unspent sum. `script`, when given, must match
 /// every entry. Duplicate entries are refused.
-pub fn verify_balance(root: &F, b: &Balance, script: Option<&[u8]>) -> Result<u64, MapError> {
-  let sh = script.map(script_hash);
+pub fn verify_balance(root: &F, r_s: &F, b: &Balance, script: Option<&[u8]>) -> Result<u64, MapError> {
+  let sh = script.map(|s| script_fp(s, *r_s));
   let mut seen = std::collections::HashSet::new();
   let mut sum = 0u64;
   for e in &b.entries {
@@ -531,7 +554,7 @@ pub fn verify_balance(root: &F, b: &Balance, script: Option<&[u8]>) -> Result<u6
       return Err(MapError::BadProof);
     }
     if let Some(s) = sh {
-      if e.proof.leaf.script_hash != s {
+      if e.proof.leaf.script_fp != s {
         return Err(MapError::BadProof);
       }
     }
@@ -582,8 +605,8 @@ pub fn display_hex(h: &[u8; 32]) -> String {
 }
 
 impl Window {
-  pub fn new(prev_hash: [u8; 32], verify: bool) -> Self {
-    Window { map: UtxoMap::new(), prev_hash, verify }
+  pub fn new(prev_hash: [u8; 32], r_s: F, verify: bool) -> Self {
+    Window { map: UtxoMap::with_rs(r_s), prev_hash, verify }
   }
 
   /// One block: header link, Merkle root, then the events in serialization order.
@@ -620,10 +643,6 @@ impl Window {
       st.inputs += tx.inputs.len() as u64;
       st.outputs += tx.outputs.len() as u64;
       for inp in &tx.inputs {
-        let coinbase = ti == 0 && inp.prev_txid == [0; 32] && inp.vout == u32::MAX;
-        if coinbase {
-          continue;
-        }
         match self.map.spend(&inp.prev_txid, inp.vout).map_err(|e| format!("block {height} tx {ti}: {e:?}"))? {
           SpendOutcome::InWindow(p) => {
             if self.verify {
@@ -778,20 +797,20 @@ mod tests {
     let b = m.balance_of_script(&s);
     assert_eq!(b.entries.len(), 3);
     assert_eq!(b.unspent_sum, 107);
-    assert_eq!(verify_balance(&m.root(), &b, Some(&s)).unwrap(), 107);
-    assert!(verify_balance(&m.root(), &b, Some(&[0x51])).is_err());
+    assert_eq!(verify_balance(&m.root(), &fu(DEFAULT_RS), &b, Some(&s)).unwrap(), 107);
+    assert!(verify_balance(&m.root(), &fu(DEFAULT_RS), &b, Some(&[0x51])).is_err());
     let b2 = m.balance_of_outpoints(&[(txid(1), 0), (txid(1), 1)]).unwrap();
     assert_eq!(b2.unspent_sum, 140);
     assert_eq!(m.balance_of_outpoints(&[(txid(9), 0)]).err(), Some(MapError::NotFound));
     // A tampered value fails the proof.
     let mut b3 = m.balance_of_script(&s);
     b3.entries[0].proof.leaf.value += 1;
-    assert!(verify_balance(&m.root(), &b3, Some(&s)).is_err());
+    assert!(verify_balance(&m.root(), &fu(DEFAULT_RS), &b3, Some(&s)).is_err());
     // Counting an entry twice fails.
     let mut b4 = m.balance_of_script(&s);
     let dup = BalanceEntry { txid: b4.entries[0].txid, vout: b4.entries[0].vout, proof: b4.entries[0].proof.clone() };
     b4.entries.push(dup);
-    assert!(verify_balance(&m.root(), &b4, Some(&s)).is_err());
+    assert!(verify_balance(&m.root(), &fu(DEFAULT_RS), &b4, Some(&s)).is_err());
   }
 
   #[test]
@@ -865,15 +884,15 @@ mod tests {
     let h1 = sha256d(&b1[..80]);
     let t2 = tx(&[(id1, 1), (txid(88), 0)], &[(25, 3)]);
     let b2 = block(h1, &[cb(2), t2]);
-    let mut w = Window::new([5; 32], true);
+    let mut w = Window::new([5; 32], fu(DEFAULT_RS), true);
     let s1 = w.process_block(1, &b1).unwrap();
-    assert_eq!((s1.creates, s1.spends_before_window, s1.spends_in_window), (3, 1, 0));
+    assert_eq!((s1.creates, s1.spends_before_window, s1.spends_in_window), (3, 2, 0));
     let s2 = w.process_block(2, &b2).unwrap();
-    assert_eq!((s2.creates, s2.spends_before_window, s2.spends_in_window), (2, 1, 1));
+    assert_eq!((s2.creates, s2.spends_before_window, s2.spends_in_window), (2, 2, 1));
     let bal = w.map.balance_of_script(&[1]);
     assert_eq!(bal.unspent_sum, 60);
     // A broken link is refused.
-    let mut w2 = Window::new([6; 32], true);
+    let mut w2 = Window::new([6; 32], fu(DEFAULT_RS), true);
     assert!(w2.process_block(1, &b1).is_err());
   }
 }

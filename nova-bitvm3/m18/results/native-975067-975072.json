@@ -12,12 +12,12 @@
       "nonwitness_bytes": 841270,
       "outputs": 13130,
       "raw_bytes": 1473789,
-      "seconds": 205.449721366,
+      "seconds": 635.882111881,
       "sha256_blocks_header": 3,
       "sha256_blocks_merkle": 18486,
       "sha256_blocks_txid_final": 6153,
       "sha256_blocks_txs": 16694,
-      "spends_before_window": 3984,
+      "spends_before_window": 3985,
       "spends_in_window": 4990,
       "transactions": 6153
     },
@@ -33,12 +33,12 @@
       "nonwitness_bytes": 776039,
       "outputs": 14141,
       "raw_bytes": 1665380,
-      "seconds": 234.847523973,
+      "seconds": 479.345594527,
       "sha256_blocks_header": 3,
       "sha256_blocks_merkle": 20775,
       "sha256_blocks_txid_final": 6920,
       "sha256_blocks_txs": 15334,
-      "spends_before_window": 1645,
+      "spends_before_window": 1646,
       "spends_in_window": 6296,
       "transactions": 6920
     },
@@ -54,12 +54,12 @@
       "nonwitness_bytes": 798195,
       "outputs": 13868,
       "raw_bytes": 1598176,
-      "seconds": 258.999820293,
+      "seconds": 537.848487769,
       "sha256_blocks_header": 3,
       "sha256_blocks_merkle": 20235,
       "sha256_blocks_txid_final": 6740,
       "sha256_blocks_txs": 15556,
-      "spends_before_window": 1563,
+      "spends_before_window": 1564,
       "spends_in_window": 6218,
       "transactions": 6740
     },
@@ -75,12 +75,12 @@
       "nonwitness_bytes": 797845,
       "outputs": 13408,
       "raw_bytes": 1599952,
-      "seconds": 332.640146523,
+      "seconds": 471.455411044,
       "sha256_blocks_header": 3,
       "sha256_blocks_merkle": 19464,
       "sha256_blocks_txid_final": 6481,
       "sha256_blocks_txs": 15463,
-      "spends_before_window": 1822,
+      "spends_before_window": 1823,
       "spends_in_window": 6099,
       "transactions": 6481
     },
@@ -96,12 +96,12 @@
       "nonwitness_bytes": 829739,
       "outputs": 7748,
       "raw_bytes": 1503637,
-      "seconds": 290.736568845,
+      "seconds": 188.563631487,
       "sha256_blocks_header": 3,
       "sha256_blocks_merkle": 8001,
       "sha256_blocks_txid_final": 2662,
       "sha256_blocks_txs": 14334,
-      "spends_before_window": 6710,
+      "spends_before_window": 6711,
       "spends_in_window": 1024,
       "transactions": 2662
     },
@@ -117,21 +117,21 @@
       "nonwitness_bytes": 821783,
       "outputs": 12297,
       "raw_bytes": 1527879,
-      "seconds": 240.522184552,
+      "seconds": 223.613737083,
       "sha256_blocks_header": 3,
       "sha256_blocks_merkle": 11226,
       "sha256_blocks_txid_final": 3737,
       "sha256_blocks_txs": 14760,
-      "spends_before_window": 5061,
+      "spends_before_window": 5062,
       "spends_in_window": 1820,
       "transactions": 3737
     }
   ],
   "final_map": {
-    "depth": 32,
+    "depth": 20,
     "last_block_hash": "000000000000000000013ec209c5510205d35f80f657c20ef1ea16f73f6ff792",
     "leaves": 74593,
-    "root_le_hex": "9d4dbc8298fef5af762ced438db1f07b45f78f90dc09f437d87a6c8d2982d220"
+    "root_le_hex": "7e18b0838195310d993131ebe62839d3ddca587b26f194c66310cd1369962d1c"
   },
   "m16_output": {
     "pay1_value_sats": 940000,
@@ -176,14 +176,15 @@
     "sha256_blocks_merkle": 98187,
     "sha256_blocks_txid_final": 32693,
     "sha256_blocks_txs": 92141,
-    "spends_before_window": 20785,
+    "spends_before_window": 20791,
     "spends_in_window": 26447,
     "transactions": 32693
   },
-  "wall_seconds_all_blocks_with_proof_checks": 1563.338959563,
+  "wall_seconds_all_blocks_with_proof_checks": 2537.231588236,
   "window": {
     "first": 975067,
     "last": 975072,
-    "previous_hash": "000000000000000000017d86fef42423ab8a51b2e87e352cd7ef225e354cc148"
+    "previous_hash": "000000000000000000017d86fef42423ab8a51b2e87e352cd7ef225e354cc148",
+    "r_s_le_hex": "efec1a32a67d0d3892a725a37fe9cc3d125bf67f05ce882c2858c4c3a2b25b10"
   }
 }

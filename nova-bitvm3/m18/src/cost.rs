@@ -14,7 +14,7 @@ use nova_snark::frontend::util_cs::test_cs::TestConstraintSystem;
 use nova_snark::frontend::{ConstraintSystem, LinearCombination, SynthesisError};
 use nova_snark::traits::circuit::StepCircuit;
 
-fn pow2(k: u32) -> F {
+pub(crate) fn pow2(k: u32) -> F {
   F::from(2u64).pow_vartime([k as u64])
 }
 
@@ -24,14 +24,14 @@ fn pow2(k: u32) -> F {
 
 pub struct G<'a, CS: ConstraintSystem<F>> {
   pub cs: &'a mut CS,
-  n: usize,
+  pub(crate) n: usize,
 }
 
 impl<'a, CS: ConstraintSystem<F>> G<'a, CS> {
   pub fn new(cs: &'a mut CS) -> Self {
     G { cs, n: 0 }
   }
-  fn nm(&mut self) -> String {
+  pub(crate) fn nm(&mut self) -> String {
     self.n += 1;
     format!("g{}", self.n)
   }
@@ -39,23 +39,23 @@ impl<'a, CS: ConstraintSystem<F>> G<'a, CS> {
     let nm = self.nm();
     AllocatedNum::alloc_infallible(self.cs.namespace(|| nm), || v)
   }
-  fn val(a: &AllocatedNum<F>) -> F {
+  pub(crate) fn val(a: &AllocatedNum<F>) -> F {
     a.get_value().unwrap_or(F::ZERO)
   }
   /// A witness fixed to a constant: one constraint.
-  fn constant(&mut self, v: F) -> AllocatedNum<F> {
+  pub(crate) fn constant(&mut self, v: F) -> AllocatedNum<F> {
     let a = self.alloc(v);
     let nm = self.nm();
     let var = a.get_variable();
     self.cs.enforce(|| nm, |l| l + var, |l| l + CS::one(), |l| l + (v, CS::one()));
     a
   }
-  fn enforce_eq(&mut self, a: &AllocatedNum<F>, b: &AllocatedNum<F>) {
+  pub(crate) fn enforce_eq(&mut self, a: &AllocatedNum<F>, b: &AllocatedNum<F>) {
     let nm = self.nm();
     let (x, y) = (a.get_variable(), b.get_variable());
     self.cs.enforce(|| nm, |l| l + x, |l| l + CS::one(), |l| l + y);
   }
-  fn bit(&mut self, b: bool) -> AllocatedBit {
+  pub(crate) fn bit(&mut self, b: bool) -> AllocatedBit {
     let nm = self.nm();
     AllocatedBit::alloc(self.cs.namespace(|| nm), Some(b)).unwrap()
   }
@@ -76,7 +76,7 @@ impl<'a, CS: ConstraintSystem<F>> G<'a, CS> {
   }
   /// Bits of v, little-endian, n of them, constrained to recompose to the variable `x` shifted
   /// by `k` (sum 2^i b_i = x + k as field elements).
-  fn bits_of(&mut self, v: F, n: usize, x: &LinearCombination<F>) -> Vec<AllocatedBit> {
+  pub(crate) fn bits_of(&mut self, v: F, n: usize, x: &LinearCombination<F>) -> Vec<AllocatedBit> {
     let le: Vec<bool> = v.to_le_bits().iter().take(n).map(|b| *b).collect();
     let bits: Vec<AllocatedBit> = le.iter().map(|&b| self.bit(b)).collect();
     let mut lc = LinearCombination::zero();
@@ -97,14 +97,14 @@ impl<'a, CS: ConstraintSystem<F>> G<'a, CS> {
   }
   /// a < b as a bit, for a, b below 2^248: the top bit of the 249-bit decomposition of
   /// b - a - 1 + 2^248.
-  fn lt_bit(&mut self, a: &AllocatedNum<F>, b: &AllocatedNum<F>) -> AllocatedBit {
+  pub(crate) fn lt_bit(&mut self, a: &AllocatedNum<F>, b: &AllocatedNum<F>) -> AllocatedBit {
     let v = Self::val(b) - Self::val(a) - F::ONE + pow2(248);
     let lc = LinearCombination::zero() + b.get_variable() - a.get_variable() + (pow2(248) - F::ONE, CS::one());
     let bits = self.bits_of(v, 249, &lc);
     bits[248].clone()
   }
   /// 1 when x = 0: two constraints.
-  fn is_zero(&mut self, x: &AllocatedNum<F>) -> AllocatedNum<F> {
+  pub(crate) fn is_zero(&mut self, x: &AllocatedNum<F>) -> AllocatedNum<F> {
     let xv = Self::val(x);
     let inv = self.alloc(xv.invert().unwrap_or(F::ZERO));
     let z = self.alloc(if bool::from(xv.is_zero()) { F::ONE } else { F::ZERO });
@@ -117,7 +117,7 @@ impl<'a, CS: ConstraintSystem<F>> G<'a, CS> {
     z
   }
   /// One path walk: leaf hash up to the root, directions from `bits` (leaf level first).
-  fn path_root(&mut self, leaf: &AllocatedNum<F>, bits: &[AllocatedBit], sibs: &[AllocatedNum<F>]) -> AllocatedNum<F> {
+  pub(crate) fn path_root(&mut self, leaf: &AllocatedNum<F>, bits: &[AllocatedBit], sibs: &[AllocatedNum<F>]) -> AllocatedNum<F> {
     let mut cur = leaf.clone();
     for (b, s) in bits.iter().zip(sibs) {
       let bv = b.get_value().unwrap_or(false);
@@ -133,7 +133,7 @@ impl<'a, CS: ConstraintSystem<F>> G<'a, CS> {
     }
     cur
   }
-  fn key_of(&mut self, lo: &AllocatedNum<F>, hi: &AllocatedNum<F>, vout: &AllocatedNum<F>) -> AllocatedNum<F> {
+  pub(crate) fn key_of(&mut self, lo: &AllocatedNum<F>, hi: &AllocatedNum<F>, vout: &AllocatedNum<F>) -> AllocatedNum<F> {
     let kfull = self.hash(&[lo.clone(), hi.clone(), vout.clone()]);
     // The canonical bit decomposition: a non-canonical one would change the low 248 bits.
     let nm = self.nm();
@@ -150,12 +150,12 @@ impl<'a, CS: ConstraintSystem<F>> G<'a, CS> {
     self.cs.enforce(|| nm, |l| l, |l| l, |_| lc - kv);
     key
   }
-  fn leaf_hash(&mut self, f: &[AllocatedNum<F>; 6]) -> AllocatedNum<F> {
+  pub(crate) fn leaf_hash(&mut self, f: &[AllocatedNum<F>; 6]) -> AllocatedNum<F> {
     self.hash(f)
   }
 }
 
-/// A leaf as witness values: key, next_key, next_index, value, script_hash, spent.
+/// A leaf as witness values: key, next_key, next_index, value, script_fp, spent.
 #[derive(Clone)]
 pub struct LeafW(pub [F; 6]);
 
@@ -167,11 +167,11 @@ impl Default for LeafW {
 
 impl From<&Leaf> for LeafW {
   fn from(l: &Leaf) -> Self {
-    LeafW([l.key, l.next_key, fu(l.next_index), fu(l.value), l.script_hash, fu(l.spent as u64)])
+    LeafW([l.key, l.next_key, fu(l.next_index), fu(l.value), l.script_fp, fu(l.spent as u64)])
   }
 }
 
-fn idx_bits(i: u64) -> Vec<bool> {
+pub(crate) fn idx_bits(i: u64) -> Vec<bool> {
   (0..D).map(|k| (i >> k) & 1 == 1).collect()
 }
 
@@ -186,7 +186,7 @@ pub struct CreateWit {
   pub new_idx: u64,
   pub app_sibs: Vec<F>,
   pub value: u64,
-  pub script_hash: F,
+  pub script_fp: F,
 }
 
 impl Default for CreateWit {
@@ -201,7 +201,7 @@ impl Default for CreateWit {
       new_idx: 1,
       app_sibs: vec![F::ZERO; D],
       value: 0,
-      script_hash: F::ZERO,
+      script_fp: F::ZERO,
     }
   }
 }
@@ -218,7 +218,7 @@ impl CreateWit {
       new_idx: p.append.index,
       app_sibs: p.append.siblings.clone(),
       value: p.new_leaf.value,
-      script_hash: p.new_leaf.script_hash,
+      script_fp: p.new_leaf.script_fp,
     }
   }
 }
@@ -276,10 +276,10 @@ pub fn create_gadget<CS: ConstraintSystem<F>>(g: &mut G<CS>, w: &CreateWit, root
   let e = g.path_root(&zero, &new_bits, &app_sibs);
   g.enforce_eq(&e, &mid);
 
-  // Append the new leaf (key, low.next_key, low.next_index, value, script_hash, unspent).
+  // Append the new leaf (key, low.next_key, low.next_index, value, script_fp, unspent).
   let value = g.alloc(fu(w.value));
   g.range(&value, 64);
-  let sh = g.alloc(w.script_hash);
+  let sh = g.alloc(w.script_fp);
   let nl = g.leaf_hash(&[key, l[1].clone(), l[2].clone(), value, sh, zero]);
   g.path_root(&nl, &new_bits, &app_sibs)
 }
@@ -361,7 +361,7 @@ pub fn nonmember_gadget<CS: ConstraintSystem<F>>(g: &mut G<CS>, w: &SpendWit, ro
 // ---------------------------------------------------------------------------------------------
 
 /// The state's two 128-bit halves as numbers <-> eight words.
-fn state_to_words<CS: ConstraintSystem<F>>(g: &mut G<CS>, lo: &AllocatedNum<F>, hi: &AllocatedNum<F>) -> Vec<UInt32> {
+pub(crate) fn state_to_words<CS: ConstraintSystem<F>>(g: &mut G<CS>, lo: &AllocatedNum<F>, hi: &AllocatedNum<F>) -> Vec<UInt32> {
   let mut words = vec![];
   for half in [lo, hi] {
     let v = G::<CS>::val(half);
@@ -382,7 +382,7 @@ fn state_to_words<CS: ConstraintSystem<F>>(g: &mut G<CS>, lo: &AllocatedNum<F>, 
   words
 }
 
-fn words_to_state<CS: ConstraintSystem<F>>(g: &mut G<CS>, words: &[UInt32]) -> (AllocatedNum<F>, AllocatedNum<F>) {
+pub(crate) fn words_to_state<CS: ConstraintSystem<F>>(g: &mut G<CS>, words: &[UInt32]) -> (AllocatedNum<F>, AllocatedNum<F>) {
   let mut out = vec![];
   for half in words.chunks(4) {
     let bits: Vec<Boolean> = half.iter().flat_map(|w| w.clone().into_bits_be()).collect();

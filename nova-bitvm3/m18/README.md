@@ -33,12 +33,19 @@ created inside it. The per-step and per-block figures are in Status.
 ## The map
 
 An indexed Merkle tree (a sorted linked list in a fixed-depth Merkle tree, as used for nullifier
-sets), depth D, over the scalar field of Pallas, hashed with Poseidon:
+sets), depth D = 20 (1,048,576 leaves, about 80 mainnet blocks of outputs), over the scalar field
+of Pallas, hashed with Poseidon:
 - key `k` = the low 248 bits of `Poseidon(txid_lo, txid_hi, vout)` (txid in internal byte order as
-  two 128-bit limbs). Keys are below 2^248, so an order comparison is a 249-bit decomposition;
-- leaf `(k, next_k, next_index, value, script_hash, spent)`, hashed as a 6-input Poseidon, with
-  `script_hash = Poseidon(script bytes packed 31 per element, length)`. Leaf 0 is a sentinel with
-  key 0; `next_k = 0` marks the last leaf; an empty slot is the leaf hash 0.
+  two 16-byte little-endian limbs). Keys are below 2^248, so an order comparison is a 249-bit
+  decomposition;
+- leaf `(k, next_k, next_index, value, script_fp, spent)`, hashed as a 6-input Poseidon. Leaf 0 is
+  a sentinel with every field 0; `next_k = 0` marks the last leaf; an empty slot is the leaf hash 0;
+- `script_fp` is a fingerprint of the output script: Horner evaluation at `r_s` of the sequence
+  (script length, byte 0, byte 1, ...), starting from 0, where
+  `r_s = Poseidon(1, hash(H−1)_lo, hash(H−1)_hi, hash(T)_lo, hash(T)_hi)` over the 16-byte
+  little-endian limbs of the internal-order hashes. The block hashes fix every script in the
+  window before `r_s` exists, so two different scripts collide with probability at most
+  (length)/|F|. A balance query recomputes `script_fp` of its script with the window's `r_s`.
 
 Operations, one per event:
 - **create** (an output): a non-membership proof for k (the low leaf has `key < k < next_key`),
@@ -52,107 +59,268 @@ A Utreexo forest supports add and delete but not proofs of absence. Absence is w
 window sound: a prover who called an in-window spend "before window" would keep a spent output in
 the map, and the non-membership proof refuses that.
 
-The coinbase input (the null outpoint, first transaction of a block) produces no event. All
-outputs are created, OP_RETURN included; an unspendable output never counts toward a balance
-except as its own value, which is zero for every OP_RETURN in practice. A duplicate txid (the two
-BIP30 pairs before height 91,880) fails non-membership, so a window cannot cover those blocks.
+Every output is created, OP_RETURN included (an unspendable output adds its own value, zero in
+practice). The coinbase input is an ordinary input event with the null outpoint; its
+non-membership always holds, since no transaction has txid 0. A duplicate txid (the two BIP30
+pairs before height 91,880) fails non-membership, so a window cannot cover those blocks.
 
 ## The step circuit
 
-One uniform Nova step, so the existing verifiers (M12's guest A, the M14 BitVM3 circuit,
-TradeLayer's type-36 verifier) apply with a new key and no new code. A step:
-1. absorbs c SHA-256 blocks of one transaction's padded non-witness serialization (a step never
-   spans two transactions) and runs the byte parser over them. The parser is a state machine over
-   version, input count, outpoints, scriptSig lengths and bytes, sequences, output count, values,
-   script lengths and bytes, and lock time. It appends each completed input and output, as an
-   event, to a producer hash chain;
-2. pops one event from a consumer hash chain and applies one map operation. At the window's end
-   the producer and consumer chains and counts must be equal, so every event is applied once, in
-   order;
-3. on a transaction's last block, finishes SHA-256d into the txid and pushes it onto a Merkle
-   builder (a stack of up to 15 digests in the state). One SHA-256d merge of two digests runs
-   per step;
-4. on a block's last step, finishes the Merkle root (with Bitcoin's odd-node duplication), hashes
-   the 80-byte header, and checks the root and the link to the previous header hash.
+One uniform Nova step (plain Nova, not SuperNova), so the verification path is the one NHC1 uses.
+The state has 72 elements; M12's guest A fixes the arity at 17 (`m12/native/src/bundle.rs`), so
+verifying M18 inside SP1 needs guest A generalised over the arity. The Nova verifier code itself
+is unchanged.
 
-The fold's public output is: H, T, the hash of header H − 1, the hash of header T, the map root,
-the number of created and spent outputs, and the event chain heads.
+The native step machine (`src/machine.rs`, `step(&State, &StepWitness)`) is the source of truth.
+The circuit (`src/circuit.rs`, `M18Step`) enforces exactly the relations `step` checks, and its
+`z` is `State::to_vec`.
+
+A step has two slots that run side by side: one SHA-256 compression (the producer) and one map
+leaf update (the consumer). Per block the window needs 25,000 to 43,032 compressions and 23,231
+to 36,224 leaf updates, so a block takes about max(compressions, leaf updates) steps.
+
+### State and witness
+
+`z` in order: producer (`phase`, `fresh`, SHA register `sha` (2), previous block hash `prev` (2),
+`height`, `n`, frontier (16 × 2), `carry` (2), `mlevel`, `lastf`), parser (`ps`, `rem`, `acc`,
+`vmul`, `n_in`, `n_out`, `out_idx`, `pl`, `ph`, `val`, `sfp`, `tx_len`, `lenacc`), producer
+fingerprint `fp`, consumer (`root`, `leaf_count`, `fc`, `gc`, `open`, `tx` (2), `pending`,
+`pend`), constants and result (`h0` (2), `r_s`, `r`, `sealed`). A verifier of the proof recomputes
+z0 with `State::initial` (empty map, `leaf_count = 1`, every fingerprint and flag 0, `h0 = prev =
+hash(H−1)`, and the window's `r_s`, `r`) and requires `sealed = 1` in the output.
+
+Two forms of a 32-byte hash appear. The SHA register, the frontier and `carry` hold the halves
+form: `lo` is the big-endian integer of bytes 0..16 (the SHA-256 state words, high word first), so
+the register can be absorbed back as a message or chaining value. `prev`, `h0`, the `tx`
+register and the txid in events hold the limb form (little-endian limbs of the internal byte
+order), the form the map key hashes. The two are different weightings of the same 256 bits, so a
+compression output yields both for the price of two constraints each.
+
+The witness of a step: `idle`, the 64 message bytes `block`, `last` (at TXID), `end` (at HDR3),
+the consumer's `close`, `open` (with the txid limbs), `op`, three event fields, the old leaf, the
+index and the D siblings.
+
+### Producer: one compression per step, chosen by a phase
+
+| phase | message block | chaining value in | after |
+|---|---|---|---|
+| BODY | 64 witness bytes of the current transaction's padded non-witness serialization, run through the parser | IV if the transaction is fresh, else the SHA register | BODY, or TXID when the parser reaches DONE |
+| TXID | SHA register (32 bytes) ‖ padding for 32 bytes | IV | add the txid to the frontier at level 0 |
+| MERGE1 | frontier slot L ‖ carry | IV | MERGE2; slot L is consumed (n −= 2^L) |
+| MERGE2 | padding for 64 bytes (constant) | SHA register | MERGE3 |
+| MERGE3 | SHA register ‖ padding for 32 bytes | IV | add the result to the frontier at level L + 1 |
+| HDR1 | header bytes 0..63 (witness) | IV | HDR2 |
+| HDR2 | header bytes 64..79 ‖ padding for 80 bytes | SHA register | HDR3 |
+| HDR3 | SHA register ‖ padding for 32 bytes | IV | next block's BODY, or DONE |
+| DONE | ignored | ignored | DONE |
+
+The message of a phase other than BODY, HDR1 and the first 16 bytes of HDR2 is derived from the
+state, and the circuit checks the witness block against it bit by bit. Every active step sets the
+SHA register to the compression output.
+
+A witness flag `idle` makes a step leave the whole producer state unchanged (the compression runs
+on ignored input); the prover uses it when a block has more leaf updates than compressions.
+
+The Merkle tree is built as a binary counter over a frontier of 16 slots (a block has fewer than
+2^16 transactions): `n` counts the leaves added in this block, slot j is occupied when bit j of n
+is 1. "Add node X at level L": if bit L of n is 0, slot L := X and n += 2^L; otherwise carry := X
+and the next phase is MERGE1 at level L (left = slot L, right = carry). After a node is placed:
+- if the transaction just finished was not the block's last (a witness flag set at TXID, kept in
+  `lastf`), go to BODY;
+- if it was the last and n is a power of two, slot log2(n) is the Merkle root: copy it to the
+  carry register and go to HDR1;
+- otherwise duplicate: j := the lowest set bit of n, carry := slot j, go to MERGE1 at level j
+  (merging slot j with itself, Bitcoin's odd-node rule).
+
+A node placed at level 16 is refused, and so is a merge of an empty slot.
+
+The header phases check: header bytes 4..35 equal the previous block hash (state), header bytes
+36..67 equal the root (carry register; bytes 36..63 in HDR1, 64..67 in HDR2). HDR3 sets the
+previous block hash to the new block hash, height += 1, n := 0 and `fresh`, and
+- requires the consumer to be in step with the producer after this step's consumer work: no open
+  transaction, no pending create, and `Fc = Fp`. The consumer may apply its last close and
+  nothing else in this step; it cannot start the next block's events (they are not in `Fp`);
+- with the witness flag `end`, seals the window: it checks
+  `r_s = Poseidon(1, h0_lo, h0_hi, hash(T)_lo, hash(T)_hi)` and `r = Poseidon(2, r_s, Gc)`, sets
+  `sealed = 1` and moves to DONE.
+
+A consumer of the proof requires `sealed = 1`. After the seal a step changes nothing: the
+consumer's `close`, `open` and ops must be empty once `sealed = 1`, and the producer is in DONE.
+(Without this rule a prover could keep folding after the seal and move the root the proof
+reports.)
+
+A 64-byte transaction is refused (the parser checks the length): its txid would equal an inner
+Merkle node, letting a prover collapse a subtree into one fake transaction and hide its spends.
+The duplicated-last-transaction mutation (CVE-2012-2459) gives the same root, but a repeated
+transaction re-creates its outputs and fails non-membership.
+
+### The parser
+
+A state machine over the bytes of BODY steps, carried between steps. States (21): VER (4 bytes),
+INCNT_FIRST, INCNT_REST, PTXLO (16), PTXHI (16), PVOUT (4), SSLEN_FIRST, SSLEN_REST, SS,
+SEQ (4), OUTCNT_FIRST, OUTCNT_REST, VALUE (8), SPKLEN_FIRST, SPKLEN_REST, SPK, LOCK (4), PAD80,
+PADZ, LEN, DONE. Registers: `rem` (bytes left in the field), `acc` and `vmul` (little-endian
+accumulation: `acc += byte · vmul`, `vmul *= 256`), `n_in` and `n_out` (inputs and outputs left),
+`out_idx`, `pl` and `ph` (the outpoint's txid limbs), `val`, `sfp`, `tx_len`, `lenacc`. A fresh
+parser starts in VER with `rem = 4`. In a step that is not an active BODY step the parser sits
+in a sink state that has no transitions, so it neither moves nor refuses.
+- Compact sizes: a first byte below 0xfd is the value; 0xfd and 0xfe read 2 and 4 more bytes;
+  0xff is refused. Input and output counts of 0 are refused. A byte after DONE is refused.
+- At the last PVOUT byte the input event (1, pl, ph, pv) is complete, `pv` being the accumulated
+  4 bytes. At the last SPK byte, or at the end of SPKLEN when the script is empty, the output
+  event (2, out_idx, val, sfp) is complete; `sfp` starts at the script length and absorbs each
+  script byte (`sfp·r_s + b`). Each SEQ end decrements `n_in`; each completed output
+  decrements `n_out` and increments `out_idx`.
+- After LOCK: PAD80 (the byte must be 0x80, and `rem := 8`), then PADZ (zero bytes). At block
+  position 56 a PADZ state switches to LEN, which reads the 8-byte big-endian bit length at
+  positions 56..63 and checks it equals 8·tx_len; then DONE. `tx_len` = 64 is refused. `tx_len`
+  counts the bytes of VER..LOCK.
+
+The parser reads bytes; it does not require canonical compact sizes. A block with a non-canonical
+size is not a valid block, so the chain's proven work excludes it.
+
+### Events: two fingerprints and a hash chain
+
+Both sides fold the same sequence of field elements, four per event, by Horner's rule at a
+challenge `r` (`F := ((((F·r + x1)·r + x2)·r + x3)·r + x4`, from 0). Per transaction: each input as
+(1, prev_lo, prev_hi, prev_vout), each output as (2, out_idx, value, script_fp), then
+(3, txid_lo, txid_hi, 0): the txid event is padded with a 0. The producer folds `Fp` as the
+parser completes events (any number per 64-byte block) and the txid limbs at TXID; the consumer
+folds `Fc` as it applies them. Every event starts with a nonzero tag, so equal fingerprints
+mean equal sequences except with probability (sequence length)/|F|, provided `r` is fixed after
+the consumer's sequence. The consumer also hashes its sequence into `Gc`, pinned as
+`Gc := Poseidon(Gc, x1, x2, x3, x4)` from 0 (one 5-input Poseidon per event), and the seal checks
+`r = Poseidon(2, r_s, Gc)`. The prover computes the trace natively first, derives `r_s` and
+`r` (`Gc` does not depend on `r`: the event sequence comes first), and puts both in z0.
+
+The consumer creates an output under the txid its `open` witness names and folds that same txid
+at `close`, and the producer folds the txid it hashed, so equal fingerprints bind every key to the
+real txid.
+
+### Consumer: one leaf update per step
+
+Per step the witness gives `close`, `open` (with a txid) and an op in {NONE, SPEND_IN,
+SPEND_PRE, CREATE_LOW, CREATE_NEW}, applied in that order:
+- `close` (requires an open transaction and no pending create) folds (3, txid) into Fc and Gc;
+- `open` sets the current txid (requires none open);
+- the op updates one leaf: old leaf and new leaf with one path (D index bits, D siblings), the old
+  root must equal the state root and the new root replaces it. An event op requires an open
+  transaction and no pending create.
+  - SPEND_IN: old.k = k (k from the input event), old.spent = 0, new = old with spent = 1;
+  - SPEND_PRE: old.k < k and (old.next_k = 0 or k < old.next_k); new = old;
+  - CREATE_LOW: the same non-membership on old; new = old with next_k = k and
+    next_index = leaf_count; the hash of the new leaf (k, old.next_k, old.next_index, value,
+    script_fp, 0) waits in `pend`;
+  - CREATE_NEW: requires `pending`; the old slot is empty (hash 0) at index leaf_count; the new
+    leaf hash is `pend`; leaf_count += 1;
+  - NONE: new = old.
+  SPEND_IN, SPEND_PRE and CREATE_LOW fold their event into Fc and Gc; for outputs
+  k = key(current txid, out_idx). A step can carry two events: the close of one transaction and
+  the first event of the next.
+
+The fold's public output (in zn): H, the height after T, hash(H−1), hash(T), the map root, the
+leaf count, `r_s`, and `sealed`.
+
+### The trace
+
+`run_window` generates the witnesses of a window (blocks and hash(H−1)) and runs `step` on each.
+It derives `r_s` and `r`, then schedules the two slots greedily: the producer takes the next
+phase every step; the consumer pops its queue (open a transaction, spends, creates as LOW and
+NEW, close) packing a close, an open and one op into a step. At HDR3 the producer waits (idle)
+until the consumer's queue holds at most the final close, so a block takes
+max(compressions, leaf updates) steps plus a few.
 
 ## Status
 
-Native reference and cost model (2026-11-11). The first window is mainnet 975,067..975,072, the
-six blocks under M16's payment (txid `a652ab0c…0045`, output 0, 940,000 sats). The step circuit
-is not built yet.
+Built (2026-11-11). The first window is mainnet 975,067..975,072, the six blocks under M16's
+payment (txid `a652ab0c…0045`, output 0, 940,000 sats). All six headers match the six headers
+inside the M16 payment input.
 
-Reproduce: `scripts/cargo.sh test --release` (13 tests), then `m18 run`, `m18 cost`, `m18 fold`
-and `scripts/cost_model.py`. Raw blocks come from mempool.space into a data directory (not
-committed) and are pinned by `fixtures/blocks.json` (heights, hashes, sizes, SHA-256). All six
-headers match the six headers inside the M16 payment input.
-
-Built:
 - `src/native.rs`: block parsing (segwit stripped to the non-witness serialization), txid, Merkle
-  root with odd-node duplication, header links, the depth-32 indexed Merkle tree over Poseidon
-  (M17's sponge), create / spend-in-window / spend-before-window with proof generation and
-  checking, double spends and false "before window" claims refused, balance queries.
-- `src/cost.rs`: the map operations as Nova gadgets (create, spend in window, non-membership),
-  checked satisfiable and root-equal to the native map, a forged claim unsatisfiable, and the
-  SHA-256 absorption gadget checked against `sha2`.
+  root with odd-node duplication, header links, the depth-20 indexed Merkle tree over Poseidon
+  (M17's sponge), `script_fp`, create / spend-in-window / spend-before-window with proof
+  generation and checking, double spends and false "before window" claims refused, balance
+  queries; the coinbase input is an ordinary before-window spend.
+- `src/machine.rs`: the state, the witness, `step`, the byte parser, the trace generator.
+- `src/circuit.rs`: `M18Step`, the Nova step circuit, 51,404 constraints per step.
+- `src/cost.rs`: the map operations as standalone gadgets (the circuit reuses `key_of`,
+  `lt_bit`, `path_root`, the Poseidon sponge and the SHA-256 state packing) and the cost-model
+  step.
 
-Window 975,067..975,072 (`results/native-975067-975072.json`): every header links and every
-Merkle root matches. 32,693 transactions, 4,864,871 non-witness bytes, 92,141 padded SHA-256
-blocks for the bodies, 47,238 inputs (6 coinbase), 74,592 outputs. Events: 74,592 creates, 26,447
-in-window spends, 20,785 before-window spends. 32,729 Merkle merges. Final map: 74,593 leaves,
-root `9d4dbc82…d220` (little-endian hex in the results file). The native run with every proof
-checked took 1,563 s.
+Reproduce: `scripts/cargo.sh test --release` (22 tests, one ignored), `... test --release --lib -- --ignored`
+(the full window, needs the raw blocks), then `m18 run`, `m18 cost`, `m18 fold-window` and
+`m18 fold`. Raw blocks come from mempool.space into a data directory (not committed) and are
+pinned by `fixtures/blocks.json` (heights, hashes, sizes, SHA-256); `fold-window` takes
+`<dir> <first> <last> <out.json>` with `<h>.raw` for each height and `<first−1>.hash`.
+
+Window 975,067..975,072 through the step machine (`full_window_975067_975072`, 2026-11-11, 224,790
+steps, 2,127 s native). Every HDR3 produces its block hash, every header links, the window seals,
+the folded root equals the native map's root, and each block takes max(compressions, leaf updates)
+steps (one more when leaf updates lead, for the final close):
+
+| block | steps | compressions | leaf updates | idle steps |
+|---|---|---|---|---|
+| 975,067 | 41,336 | 41,336 | 35,235 | 0 |
+| 975,068 | 43,032 | 43,032 | 36,224 | 0 |
+| 975,069 | 42,534 | 42,534 | 35,518 | 0 |
+| 975,070 | 41,411 | 41,411 | 34,738 | 0 |
+| 975,071 | 25,000 | 25,000 | 23,231 | 0 |
+| 975,072 | 31,477 | 29,726 | 31,476 | 1,751 |
+
+The producer leads in five blocks, so the consumer idles; in the last block the consumer leads
+and the producer idles through 1,751 steps before HDR3.
+
+Native window run (`results/native-975067-975072.json`, `m18 run`, every proof checked, 2,537 s):
+32,693 transactions, 4,864,871 non-witness bytes, 92,141 padded SHA-256 blocks for the bodies, 47,238
+inputs (the 6 coinbase inputs included), 74,592 outputs. Events: 74,592 creates, 26,447 in-window
+spends, 20,791 before-window spends (6 of them the coinbase null outpoint). 32,729 Merkle merges.
+Final map: 74,593 leaves, root `7e18b083…2d1c` (little-endian hex in the results file), the root the
+step machine reaches. The depth and the script fingerprint changed the root from the earlier
+`9d4dbc82…d220`.
 
 Balance at 975,072. Output `a652ab0c…0045:0` (940,000 sats) is in the map at leaf 8 and unspent;
 its membership proof verifies against the final root and its value equals the PAY1 value. It is
 the only window output paying its script (`00148e04…ea96`, SHA-256 matches PAY1), so the balance
-of that script at 975,072 is 940,000 sats, with a verified balance proof.
+of that script at 975,072 is 940,000 sats, with a verified balance proof (the script is matched by
+`script_fp` at the window's `r_s`).
 
-Constraints (`results/constraints.json`, Nova 0.76 TestConstraintSystem):
+Constraints (`results/constraints.json`, Nova 0.76 TestConstraintSystem, D = 20):
 
 | unit | constraints |
 |---|---|
+| M18 step circuit (arity 72) | 51,404 |
 | SHA-256 compression | 25,840 |
 | Poseidon sponge, 2 / 3 / 6 inputs | 313 / 313 / 625 |
-| map create, D = 32 | 43,316 |
-| map spend in window | 21,995 |
-| map spend before window (non-membership) | 11,822 |
+| map create (standalone gadget) | 28,220 |
+| map spend in window | 14,447 |
+| map spend before window (non-membership) | 8,042 |
 
-Create is 128 two-input hashes along four paths, three leaf hashes, the key hash with its
-canonical 255-bit decomposition, and two 249-bit comparisons. The byte parser is not built; no
-figure below includes it.
+End to end on mainnet blocks 170 and 171 (`m18 fold-window <dir> 170 171 <out>`,
+`results/fold-window-170-171.json`; block 169's hash and the two raw blocks, 490 and 215 bytes,
+from mempool.space): 23 steps (block 170: 16 steps, 16 compressions, 8 leaf updates; block 171: 7
+steps, 7 compressions, 3 leaf updates). All 23 steps fold in a RecursiveSNARK that
+verifies and ends sealed with the native root `5fde007a…8a1f` (little-endian hex, 5 leaves); the
+CompressedSNARK (Spartan over IPA, the types of the earlier fold benchmark) proves and verifies.
+Timings, Nova 0.76 on Pallas and Vesta, 4 threads, the laptop's WSL shared with other jobs (load
+average 12 to 19):
 
-Fold timing (`results/fold-timing-run1.json`, `results/fold-timing.json`; Nova 0.76, Pallas and
-Vesta, 4 threads, laptop shared with another running job, 20 steps each; a step is c compressions
-plus one create, with the SHA-256 state and the map root carried in the Nova state):
+| stage | seconds |
+|---|---|
+| public parameters | 53.0 |
+| fold, per step (steady) | 2.23 (1.2 to 3.8) |
+| fold, 23 steps | 49.7 |
+| recursive verify | 2.50 |
+| compressed setup | 20.9 |
+| compressed prove | 109.5 |
+| compressed verify | 2.67 |
+| compressed proof | 13,800 bytes |
 
-| c | constraints per step | seconds per step, run 1 / run 2 | seconds per million constraints |
-|---|---|---|---|
-| 1 | 70,280 | 1.04 / 1.31 | 14.8 / 18.6 |
-| 4 | 150,392 | 0.98 / 2.17 | 6.5 / 14.4 |
-| 8 | 257,208 | 4.03 / 2.08 | 15.6 / 8.1 |
+At 51,404 constraints per step the measured rate is 2.23 s per step on the loaded machine, below
+the 3.05 s per step the earlier model gave for its 251,160-constraint uniform step. A block now
+takes 37,465 steps on average, not the model's 20,304 (a create is two leaf updates, and the
+compressions set the pace), so the window of 224,790 steps comes to about 139 hours of folding,
+against the model's 103 hours.
 
-Step times move with the other job's load (the steps of one run range from 0.9 to 3.5 s), so the
-model uses the pooled rate over both runs: 12.14 s per million constraints.
-
-Cost model (`scripts/cost_model.py`, `results/cost-model.json`). A step is c absorb compressions
-and one create (measured above) plus the units the design puts in every step: one Merkle merge
-(3 compressions), the txid finish (1) and the header hash (3), each at 25,840. The step count of a
-block is its event count, 20,304 on average: every event takes one step, and the absorb stream
-(15,357 steps at c = 1) and the merge stream (5,455) fit inside it. The step count is the same for
-c = 1, 4, 8, so the smallest step, c = 1, is the cheapest:
-
-| c | constraints per step | steps per block | constraints per block | minutes per block | window of six |
-|---|---|---|---|---|---|
-| 1 | 251,160 | 20,304 | 5.10 × 10^9 | 1,032 | 103 h |
-| 4 | 331,272 | 20,304 | 6.73 × 10^9 | 1,361 | 136 h |
-| 8 | 438,088 | 20,304 | 8.89 × 10^9 | 1,800 | 180 h |
-
-Where the constraints go per block at c = 1: the typed map operations alone are 6.8 × 10^8 (12,432
-creates, 4,408 in-window spends, 3,464 before-window spends at their measured costs) and the body
-compressions 4.0 × 10^8. The rest is the per-step merge, txid finish and header units, which a
-uniform step pays on every step although a block needs 5,455 merges, 5,449 txid finishes and one
-header hash. They are the largest line, so the next design step is to run them at their true rate
-(conditional on the step's phase), not to widen c.
+The earlier bench step (c compressions plus one create at depth 32, `m18 fold`,
+`results/fold-timing*.json`, `results/cost-model.json`, `scripts/cost_model.py`) stays as the
+reference for the cost model that preceded this circuit.
