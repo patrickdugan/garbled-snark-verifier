@@ -1,5 +1,9 @@
 # Direct Stwo-to-Boolean prototype
 
+## S6: the final verifier as a function of the proof
+
+The verifier circuit is read as a computation whose inputs are the statement and the proof: 2,375,891 input bits instead of 379,025,280, and 1,720,551,518 non-free ANDs instead of 4,783,261,848, with the statement as input so that one garbling serves every statement. On the Shinigami proof it reproduces all 2,860,426 computed variables of upstream's witness; garbled (27.5 GB as a stream, about 20 minutes on a laptop) it yields the accept label for the honest proof and the reject label for a changed one. Authenticating 2.4 million input labels on Bitcoin remains unsolved. See [S6.md](S6.md) and [S6_RESULTS.json](S6_RESULTS.json).
+
 ## S5: the whole final verifier garbled and evaluated on a Shinigami proof
 
 The 4.78-billion-AND final verifier is garbled with the repository's half-gates engine as one circuit in 1,179 pieces under one delta: 4,893,461,084 ciphertexts (a 78.3 GB stream, hashed and not stored), 5.5 minutes and 11.5 GB on a laptop. Evaluated on the Shinigami `csv_valid` proof it yields the garbler's accept label; on a mutated proof, the reject label. Input labels are selected directly and the statement is a circuit constant (laboratory conventions); there is still no Bitcoin script. See [S5.md](S5.md) and [S5_RESULTS.json](S5_RESULTS.json).

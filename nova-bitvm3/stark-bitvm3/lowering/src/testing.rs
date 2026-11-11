@@ -50,3 +50,21 @@ impl CompiledCheck {
     pub fn ands(&self)->usize{self.builder.ops.iter().filter(|x|matches!(x,Op::And(..))).count()}
     pub fn gates(&self)->usize{self.builder.ops.len()}
 }
+
+/// Plain evaluation: wires are their values. For function-form tests, where a lowering also yields the
+/// value of every variable.
+pub struct Plain;
+impl Gates for Plain {
+    type W=bool;
+    fn constant(&mut self,v:bool)->bool{v}
+    fn xor(&mut self,a:bool,b:bool)->bool{a^b}
+    fn and(&mut self,a:bool,b:bool)->bool{a&b}
+}
+/// Evaluates a function on input bits: its verdict and the value of every variable.
+pub fn evaluate(function:&crate::Function,input:&[bool])->(bool,Vec<Value>){
+    let (ok,wires)=function.lower(&mut Plain,input).expect("input length");
+    let value=|q:&stwo_bitvm3_core::Qm<bool>|->Value{
+        std::array::from_fn(|i|q[i].iter().enumerate().fold(0u32,|x,(j,&bit)|x|(u32::from(bit)<<j)))
+    };
+    (ok,wires.iter().map(value).collect())
+}

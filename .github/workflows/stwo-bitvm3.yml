@@ -72,7 +72,7 @@ on:
         type: boolean
         default: false
       s5_garble:
-        description: 'Garble the whole final verifier in pieces and evaluate it on the committed Shinigami proof'
+        description: 'Garble the whole final verifier (relation form and function form) and evaluate it on the committed Shinigami proof'
         type: boolean
         default: false
 permissions:
@@ -658,6 +658,22 @@ jobs:
             /usr/bin/time -v timeout --kill-after=5s 1200s "$BIN" check-lab "fixtures/shinigami/$case/recursion_raw.bin" "fixtures/shinigami/$case/output_preimage.json" $flag 2>&1 | tee "out/check-lab-$case.txt"
             flag="--light"
           done
+      - name: Size and check the final verifier as a function of its inputs (S6)
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=target/release/stwo-bitvm3-s4-cairo
+          /usr/bin/time -v timeout --kill-after=5s 1200s "$BIN" final-func prod 2>&1 | tee out/final-func.txt
+          /usr/bin/time -v timeout --kill-after=5s 2400s "$BIN" check-func-lab fixtures/shinigami/csv_valid/recursion_raw.bin fixtures/shinigami/csv_valid/output_preimage.json --light 2>&1 | tee out/check-func-csv_valid.txt
+      - name: Publish compact function-form evidence as annotations
+        if: always()
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          join() { paste -sd'|' | sed 's/|/ | /g'; }
+          echo "::notice title=S6 function form sizes::$(grep -E '^func:' out/final-func.txt | join) | $(grep -E 'Maximum resident|Elapsed' out/final-func.txt | sed 's/^\s*//' | join)"
+          echo "::notice title=S6 function form on csv_valid::$(grep -E '^func:' out/check-func-csv_valid.txt | join) | $(grep -E 'Maximum resident|Elapsed' out/check-func-csv_valid.txt | sed 's/^\s*//' | join)"
       - name: Publish compact Shinigami receipt evidence as annotations
         if: always()
         working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
@@ -694,7 +710,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.s5_garble) ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[s5-garble]'))
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       CARGO_BUILD_JOBS: '4'
       CARGO_INCREMENTAL: '0'
@@ -728,6 +744,13 @@ jobs:
           nproc | tee out/garble-nproc.txt
           /usr/bin/time -v timeout --kill-after=5s 5400s "$BIN" fanout 1000 2>&1 | tee out/fanout.txt
           /usr/bin/time -v timeout --kill-after=5s 5400s "$BIN" garble-lab fixtures/shinigami/csv_valid/recursion_raw.bin fixtures/shinigami/csv_valid/output_preimage.json 2>&1 | tee out/garble-csv_valid.txt
+      - name: Garble the final verifier as a function of its inputs and evaluate it on the Shinigami proof (S6)
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=target/release/stwo-bitvm3-s4-cairo
+          /usr/bin/time -v timeout --kill-after=5s 6000s "$BIN" garble-func-lab fixtures/shinigami/csv_valid/recursion_raw.bin fixtures/shinigami/csv_valid/output_preimage.json 2>&1 | tee out/garble-func-csv_valid.txt
       - name: Publish compact garbling evidence as annotations
         if: always()
         working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
@@ -737,6 +760,7 @@ jobs:
           echo "::notice title=S5 garbling::$(grep -E '^garble:' out/garble-csv_valid.txt | join)"
           echo "::notice title=S5 resources::$(grep -E 'Maximum resident|Elapsed' out/garble-csv_valid.txt | sed 's/^\s*//' | join) | threads $(cat out/garble-nproc.txt)"
           echo "::notice title=S5 fan-out::$(grep -E '^fanout: shard' out/fanout.txt | join)"
+          echo "::notice title=S6 function-form garbling::$(grep -E '^garble-func:' out/garble-func-csv_valid.txt | join) | $(grep -E 'Maximum resident|Elapsed' out/garble-func-csv_valid.txt | sed 's/^\s*//' | join)"
           echo "::notice title=S5 unit tests::$(grep -E '^test |test result' out/garble-unit-tests.txt | join)"
       - uses: actions/upload-artifact@v4
         if: always()

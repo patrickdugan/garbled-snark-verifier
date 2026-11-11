@@ -2,6 +2,8 @@
 //! This is a circuit-language adapter, not a complete Stwo or Cairo verifier.
 mod program;
 pub use program::*;
+mod function;
+pub use function::{Env, Function, Kind, Step};
 #[cfg(feature = "test-utils")]
 pub mod testing;
 #[cfg(feature = "test-utils")]

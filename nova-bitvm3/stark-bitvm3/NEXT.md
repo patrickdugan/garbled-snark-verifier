@@ -1,17 +1,24 @@
 # Continuation after S2 and S3a
 
+## S6: the final verifier as a function of the proof
+
+[S6.md](S6.md) and [S6_RESULTS.json](S6_RESULTS.json). The circuit is now read as a computation: its inputs are the 100,361 values upstream guesses, typed by the gates upstream's finalization adds for them, and every other variable is computed. For the production final verifier that is **2,375,891 input bits** (512 of statement, the rest proof and advice) instead of 379,025,280, and **1,720,551,518 non-free ANDs** instead of 4,783,261,848. The statement (digest, root) is input, so one garbling serves every statement. On the Shinigami proof the function computes 2,860,426 variables with no difference from upstream's witness and rejects changed proofs, changed statement bits and non-canonical inputs. Garbled once under one delta (27.5 GB as a stream, 18 to 21 minutes on this laptop) it gives the accept label for the honest proof and the reject label for a changed one, with every wire handed between pieces label-checked.
+
+Next, in order:
+
+1. **Authenticated input.** 2,375,379 proof bits cannot be opened label by label on Bitcoin (38 MB of labels alone). Decide between opening only the 512 statement labels with an explicit data-availability rule for the proof labels, a succinct wrapper in front (the Nova and SP1 workstream), or a smaller proof; S6.md lays out the three. This is the main open problem of a direct STARK verifier.
+2. **Garbling correctness toward the counterparty** (cut-and-choose over pieces or another verifiable-garbling approach), using the per-piece commitments that already exist.
+3. **Bitcoin script and the dispute game** over the output label, the statement labels and the ciphertext commitment.
+4. **Throughput.** Sixteen threads use three times the processor time of one on the function-form garbling; the plan bounds the speed-up at nine. Profile before changing the plan again.
+5. **Review L21 as a parameter set**, or shrink the executable so the production profile carries it.
+6. **Receipt scope**: the receipt is the S3 pilot (regtest, CSV and SHA256 hashlock, no signatures).
+7. Keep Nova, SP1 and CUDA proving outside this workstream.
+
 ## S5: the whole final verifier garbled and evaluated on a Shinigami proof
 
 [S5.md](S5.md) and [S5_RESULTS.json](S5_RESULTS.json). The 4.78-billion-AND final verifier is garbled with the repository's half-gates engine as one circuit in 1,178 pieces plus a combining piece: one delta, one label pair per input bit across pieces, disjoint gate numbers per piece. For the `csv_valid` Shinigami statement that is 4,893,461,084 ciphertexts (78.3 GB as a stream, hashed and not stored), commitment `517d4e1a...8621`, 5.5 minutes and 11.5 GB on this laptop. Evaluating it gives the garbler's accept label for the honest witness and the reject label for a mutated proof. The engine's 16-bit read counter wrapped silently in release builds; that is now a hard error and pieces are cut at 1,000 constraints.
 
-Next, in order:
-
-1. **Input labels and statement as protocol objects.** Replace direct label selection by the mechanism BitVM3 will use to bind the evaluator to one witness (label commitments opened on chain or oblivious transfer), and turn the eight public output words from circuit constants into opened inputs so one garbling serves every statement.
-2. **Garbling correctness toward the counterparty** (cut-and-choose over pieces or another verifiable-garbling approach), using the per-piece commitments that already exist.
-3. **Bitcoin script and the dispute game** over the output label and the ciphertext commitment.
-4. **Review L21 as a parameter set**, or shrink the executable so the production profile carries it (the bootloader run costs 2.61 million steps more than the standalone execution, following the 169,856-word program).
-5. **Receipt scope**: the receipt is the S3 pilot (regtest, CSV and SHA256 hashlock, no signatures).
-6. Keep Nova, SP1 and CUDA proving outside this workstream.
+The follow-up list is under S6 above.
 
 ## S4: a Shinigami statement reaches the Boolean relation
 

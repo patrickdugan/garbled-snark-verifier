@@ -39,6 +39,8 @@ stwo-bitvm3-adapter = { path = "../adapter", optional = true }
 rand = { version = "0.8", optional = true }
 rand_chacha = { version = "0.3", optional = true }
 blake3 = { version = "1.6.1", optional = true }
+# The piece executors allocate small vectors from many threads at once; the system allocator does not scale there.
+mimalloc = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 stwo-bitvm3-lowering = { path = "../lowering", features = ["test-utils"] }

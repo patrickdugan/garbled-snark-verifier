@@ -61,6 +61,8 @@ pub enum Error {
     NonCanonicalBinding(usize),
     ConflictingBinding(usize),
     UnboundOutput(usize),
+    /// Function form only: a gate reads a variable that is not a constant, a typed guess or computed.
+    Undetermined(usize),
     WitnessLength { expected: usize, actual: usize },
 }
 impl std::fmt::Display for Error {
@@ -150,25 +152,25 @@ fn not<B: Gates>(b: &mut B, x: B::W) -> B::W { let t=b.constant(true); b.xor(x,t
 fn mux<B: Gates>(b: &mut B, sel: B::W, x: B::W, y: B::W) -> B::W {
     let d=b.xor(x,y); let d=b.and(sel,d); b.xor(x,d)
 }
-fn zeros<B: Gates>(b: &mut B, bits: impl IntoIterator<Item=B::W>) -> B::W {
+pub(crate) fn zeros<B: Gates>(b: &mut B, bits: impl IntoIterator<Item=B::W>) -> B::W {
     let mut ok=b.constant(true);
     for bit in bits { let z=not(b,bit); ok=b.and(ok,z); }
     ok
 }
-fn qeq<B: Gates>(b: &mut B, x: &Qm<B::W>, y: &Qm<B::W>) -> B::W { s::equal(b,&x.concat(),&y.concat()) }
-fn word<B: Gates>(b: &mut B, q: &Qm<B::W>) -> (Bits<B::W>, B::W) {
+pub(crate) fn qeq<B: Gates>(b: &mut B, x: &Qm<B::W>, y: &Qm<B::W>) -> B::W { s::equal(b,&x.concat(),&y.concat()) }
+pub(crate) fn word<B: Gates>(b: &mut B, q: &Qm<B::W>) -> (Bits<B::W>, B::W) {
     let w=[q[0][..16].to_vec(),q[1][..16].to_vec()].concat();
     let invalid_bits=q[0][16..].iter().chain(&q[1][16..]).chain(&q[2]).chain(&q[3]).copied();
     (w,zeros(b,invalid_bits))
 }
-fn pack<B: Gates>(b: &mut B, w: &[B::W]) -> Qm<B::W> {
+pub(crate) fn pack<B: Gates>(b: &mut B, w: &[B::W]) -> Qm<B::W> {
     assert_eq!(w.len(),32);
     let z=b.constant(false);
     let mut lo=w[..16].to_vec(); lo.resize(31,z);
     let mut hi=w[16..].to_vec(); hi.resize(31,z);
     [lo,hi,vec![z;31],vec![z;31]]
 }
-fn xor<B: Gates>(b: &mut B, a: &[B::W], c: &[B::W]) -> Bits<B::W> {
+pub(crate) fn xor<B: Gates>(b: &mut B, a: &[B::W], c: &[B::W]) -> Bits<B::W> {
     a.iter().zip(c).map(|(&x,&y)|b.xor(x,y)).collect()
 }
 fn add32<B: Gates>(b: &mut B, a: &[B::W], c: &[B::W]) -> Bits<B::W> {
@@ -181,7 +183,7 @@ fn add32<B: Gates>(b: &mut B, a: &[B::W], c: &[B::W]) -> Bits<B::W> {
     out
 }
 fn rotr<W: Copy>(w:&[W],n:usize)->Bits<W>{(0..32).map(|i|w[(i+n)%32]).collect()}
-fn blake_g<B: Gates>(b:&mut B,w:&[Bits<B::W>;6])->[Bits<B::W>;4]{
+pub(crate) fn blake_g<B: Gates>(b:&mut B,w:&[Bits<B::W>;6])->[Bits<B::W>;4]{
     let [mut a,mut c,mut d,mut e]=[w[0].clone(),w[1].clone(),w[2].clone(),w[3].clone()];
     a=add32(b,&a,&c); a=add32(b,&a,&w[4]);
     e=rotr(&xor(b,&e,&a),16); d=add32(b,&d,&e); c=rotr(&xor(b,&c,&d),12);
@@ -196,7 +198,7 @@ fn less<B: Gates>(b:&mut B,a:&[B::W],c:&[B::W])->B::W{
     for (&x,&y) in a.iter().zip(c) { let diff=b.xor(x,y); lt=mux(b,diff,lt,y); }
     lt
 }
-fn sorted<B: Gates>(b:&mut B,mut a:Vec<Bits<B::W>>)->Vec<Bits<B::W>>{
+pub(crate) fn sorted<B: Gates>(b:&mut B,mut a:Vec<Bits<B::W>>)->Vec<Bits<B::W>>{
     if a.is_empty(){return a;}
     let n=a.len().next_power_of_two();
     // Sentinel is strictly above every canonical QM31 tuple.

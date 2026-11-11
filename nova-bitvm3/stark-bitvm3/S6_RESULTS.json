@@ -1,0 +1,186 @@
+{
+  "schema": 1,
+  "stage": "S6 the final verifier as a function of the proof: typed inputs, computed variables, garbled with carried wires",
+  "base_head": "f071879",
+  "function_form": {
+    "production_final_verifier": {
+      "inputs": {
+        "total": 100361,
+        "u16": 83616,
+        "m31": 11165,
+        "qm31": 5580,
+        "equals_upstream_guess_counter": true
+      },
+      "input_bits": 2375891,
+      "statement_input_bits": 512,
+      "proof_and_advice_input_bits": 2375379,
+      "raw_recursion_proof_bits": 2110496,
+      "steps": 1077360,
+      "non_free_and": 1720551518,
+      "ciphertext_bytes_at_16": 27528824288,
+      "gate_depth": 2988,
+      "relation_form": {
+        "input_bits": 379025280,
+        "non_free_and": 4783261848
+      }
+    },
+    "fixture_config_final_verifier": {
+      "inputs": {
+        "total": 70159,
+        "u16": 58688,
+        "m31": 7337,
+        "qm31": 4134
+      },
+      "input_bits": 1679071,
+      "steps": 749199,
+      "non_free_and": 1200979100,
+      "relation_form": {
+        "input_bits": 263309696,
+        "non_free_and": 3338462413
+      }
+    },
+    "typing": {
+      "U16": "M31ToU32 { input: v, out: v }",
+      "M31": "PointwiseMul { v, one, v }",
+      "Qm31": "Add { v, zero, v }",
+      "source": "Context::finalize_guessed_vars at the pinned revision"
+    },
+    "permutation_outputs": "computed as the inputs sorted ascending as 124-bit integers when they have no value; a multiset check when they are guesses",
+    "statement": "the first 32 typed inputs: 16-bit halves of the eight digest words, then of the eight root words"
+  },
+  "plan_default": {
+    "target_layers": 512,
+    "piece_and_estimate": 1000000,
+    "max_steps": 20000,
+    "pieces": 3617,
+    "depth_layers": 498,
+    "longest_chain_of_pieces": 578,
+    "carried_variables": 636640,
+    "max_alive": 89249,
+    "estimated_speed_up_bound": 9.1
+  },
+  "plan_consecutive_chunks": {
+    "pieces": 759,
+    "longest_chain_of_pieces": 748,
+    "garble_seconds_single_chain": 3129.2
+  },
+  "tests": {
+    "lowering_function": {
+      "passed": 7,
+      "single_bit_input_flips": 915,
+      "rejected": 773,
+      "accepted": 142,
+      "compared_against": "relation form on the computed assignment"
+    },
+    "upstream_conformance": {
+      "passed": 5,
+      "single_bit_input_flips": 1070,
+      "rejected": 773,
+      "accepted": 297,
+      "compared_against": "upstream native checker on the computed assignment"
+    },
+    "s4_cairo": {
+      "default_features": 3,
+      "garbled_feature": 6
+    }
+  },
+  "direct_evidence": {
+    "csv_valid": {
+      "accepted": true,
+      "computed_variables_compared": 2860426,
+      "mismatches": 0,
+      "mutations": {
+        "trace_at_oods[0]+1": 20,
+        "claimed_sums[0]+1": 22,
+        "fri_last_layer_coef+1": 19,
+        "oods_pow_nonce+1": 21,
+        "fri_witness_first+1": 2,
+        "channel_salt+1": 24
+      },
+      "mutations_note": "rejecting pieces per mutation; all rejected natively and by the function, 0 computed variables differ from upstream's re-synthesized witness",
+      "statement_digest_bit_rejected": true,
+      "statement_root_bit_rejected": true,
+      "noncanonical_limb_rejected": true,
+      "seconds": 362.6,
+      "peak_rss_kib": 1103140
+    },
+    "csv_below_delay_light": {
+      "accepted": true,
+      "computed_variables_compared": 2860426,
+      "mismatches": 0,
+      "all_rejections_as_expected": true
+    },
+    "upstream_fixture_light": {
+      "accepted": true,
+      "computed_variables_compared": 1986598,
+      "mismatches": 0,
+      "all_rejections_as_expected": true
+    }
+  },
+  "garbled_evidence": {
+    "default_plan": {
+      "pieces": 3618,
+      "ciphertexts": 1720551518,
+      "ciphertext_bytes": 27528824288,
+      "gates_total": 5855251766,
+      "commitment_blake3": "237b36d4214f5a1b141950da915f1f998b27fcd4427e85ae2de691dbfdbba2f0",
+      "commitment_reproduced_by_second_run": true,
+      "handed_on_wire_labels_checked": 71056672,
+      "handed_on_values_compared": 1273280,
+      "mismatches": 0,
+      "worst_fanout": 1891,
+      "honest": {
+        "accepted": true,
+        "output_label_is_accept_label": true
+      },
+      "mutated_trace_at_oods": {
+        "accepted": false,
+        "rejecting_pieces": 20,
+        "output_label_is_reject_label": true
+      },
+      "seconds": [
+        1056.0,
+        1215.6
+      ],
+      "user_seconds": [
+        9532.65,
+        10404.69
+      ],
+      "peak_rss_kib": [
+        3337300,
+        3050844
+      ],
+      "threads": 16
+    },
+    "other_plans_same_ciphertext_count": {
+      "consecutive_chunks_759_pieces": {
+        "commitment_blake3": "3cdfda39c8cd79b92634e385a9b2bf7a7156a31dfc6384db71b9cd52afed5926",
+        "seconds": 3129.2,
+        "peak_rss_kib": 2737188
+      },
+      "layers_2048_pieces_13713": {
+        "commitment_blake3": "2ef64f29b323f166033b135cb1cefaee27c100fdcac547514e6b7878dea9e709",
+        "seconds": 1088.3
+      }
+    },
+    "environment": "WSL Ubuntu-24.04 on the laptop, RUSTFLAGS -C target-cpu=native",
+    "seed": 117
+  },
+  "authenticated_input": {
+    "labels_bytes_if_opened_per_bit": 38014256,
+    "statement_labels_bytes": 8192,
+    "conclusion": "per-bit opening of the proof labels on Bitcoin is not practical; the statement alone is; label delivery for the proof needs a data-availability assumption, a forced-publication game or a succinct wrapper"
+  },
+  "ci": "pending",
+  "not_established": [
+    "authenticated delivery of the 2,375,379 proof input labels",
+    "Bitcoin script, transactions or a dispute game",
+    "correctness of the garbling toward a second party",
+    "a reviewed parameter set (laboratory profile L21) and a receipt beyond the S3 pilot"
+  ],
+  "authorization": {
+    "full_shinigami_stark": "laboratory profile L21 only",
+    "bitvm3_dispute_protocol": false,
+    "ark_utxoref_state": false
+  }
+}

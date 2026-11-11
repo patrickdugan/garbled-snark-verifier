@@ -31,10 +31,10 @@ use stwo_bitvm3_lowering::{Program, Value};
 
 /// Each piece owns the gate indices `[index << STRIDE_LOG, (index + 1) << STRIDE_LOG)`.
 const STRIDE_LOG: u32 = 36;
-type Hasher = AesCcrGateHasher;
+pub(crate) type Hasher = AesCcrGateHasher;
 
 /// The zero label of a raw input bit, a function of the key and the bit's global position only.
-fn input_label0(key: &[u8; 32], global_var: usize, bit: usize) -> S {
+pub(crate) fn input_label0(key: &[u8; 32], global_var: usize, bit: usize) -> S {
     let mut message = [0u8; 16];
     message[..8].copy_from_slice(&(global_var as u64).to_le_bytes());
     message[8..].copy_from_slice(&(bit as u64).to_le_bytes());
@@ -94,7 +94,7 @@ impl<H: GateHasher, T: CiphertextSource> EncodeInput<EvaluateMode<H, T>> for Wit
 }
 
 /// Inputs that are wires of earlier pieces (the acceptance wires fed to the combining piece).
-struct Carried<'a, W>(&'a [W]);
+pub(crate) struct Carried<'a, W>(pub(crate) &'a [W]);
 impl<W> CircuitInput for Carried<'_, W> {
     type WireRepr = Vec<WireId>;
     fn allocate(&self, mut issue: impl FnMut() -> WireId) -> Vec<WireId> {
@@ -120,7 +120,7 @@ impl<H: GateHasher, T: CiphertextSource> EncodeInput<EvaluateMode<H, T>> for Car
 }
 
 #[derive(Default)]
-struct MemorySink {
+pub(crate) struct MemorySink {
     ciphertexts: Vec<S>,
     hash: Blake3AccumulatingHash,
 }
@@ -134,7 +134,7 @@ impl CiphertextHandler for MemorySink {
         (self.ciphertexts, self.hash.finalize())
     }
 }
-struct MemorySource {
+pub(crate) struct MemorySource {
     ciphertexts: Arc<Vec<S>>,
     position: usize,
 }
@@ -158,10 +158,10 @@ fn evaluation_hasher(seed: u64) -> Hasher {
     Hasher::from_rng(&mut ChaChaRng::seed_from_u64(seed))
 }
 
-struct Garbled<I: CircuitInput> {
-    result: StreamingResult<GarbleMode<Hasher, MemorySink>, I, Vec<GarbledWire>>,
+pub(crate) struct Garbled<I: CircuitInput> {
+    pub(crate) result: StreamingResult<GarbleMode<Hasher, MemorySink>, I, Vec<GarbledWire>>,
 }
-fn garble<I, F>(inputs: I, capacity: usize, seed: u64, first_gate: usize, build: F) -> Garbled<I>
+pub(crate) fn garble<I, F>(inputs: I, capacity: usize, seed: u64, first_gate: usize, build: F) -> Garbled<I>
 where
     I: CircuitInput<WireRepr = Vec<WireId>> + EncodeInput<GarbleMode<Hasher, MemorySink>>,
     F: Fn(&mut garbled_snark_verifier::circuit::StreamingMode<GarbleMode<Hasher, MemorySink>>, &Vec<WireId>) -> Vec<WireId>,
@@ -176,6 +176,18 @@ where
     I: CircuitInput<WireRepr = Vec<WireId>> + EncodeInput<EvaluateMode<Hasher, MemorySource>>,
     F: Fn(&mut garbled_snark_verifier::circuit::StreamingMode<EvaluateMode<Hasher, MemorySource>>, &Vec<WireId>) -> Vec<WireId>,
 {
+    let out = evaluate_all(inputs, capacity, seed, first_gate, constants, ciphertexts, build)?;
+    ensure!(out.len() == 1, "one output wire expected");
+    Ok(out[0].clone())
+}
+/// Evaluates a garbled piece and returns all of its output wires.
+pub(crate) fn evaluate_all<I, F>(
+    inputs: I, capacity: usize, seed: u64, first_gate: usize, constants: (S, S), ciphertexts: Arc<Vec<S>>, build: F,
+) -> Result<Vec<EvaluatedWire>>
+where
+    I: CircuitInput<WireRepr = Vec<WireId>> + EncodeInput<EvaluateMode<Hasher, MemorySource>>,
+    F: Fn(&mut garbled_snark_verifier::circuit::StreamingMode<EvaluateMode<Hasher, MemorySource>>, &Vec<WireId>) -> Vec<WireId>,
+{
     let expected = ciphertexts.len();
     let source = MemorySource { ciphertexts, position: 0 };
     let mode = EvaluateMode::new(evaluation_hasher(seed), capacity, constants.0, constants.1, source)
@@ -183,14 +195,13 @@ where
     let e: StreamingResult<EvaluateMode<Hasher, MemorySource>, I, Vec<EvaluatedWire>> =
         CircuitBuilder::run_streaming(inputs, mode, build);
     ensure!(e.ciphertext_handler_result == expected, "the evaluator consumed {} of {expected} ciphertexts", e.ciphertext_handler_result);
-    ensure!(e.output_value.len() == 1, "one output wire expected");
-    Ok(e.output_value[0].clone())
+    Ok(e.output_value)
 }
 
 fn lower_piece<C: CircuitContext>(c: &mut C, w: &[WireId], program: &Program) -> Vec<WireId> {
     vec![program.lower(&mut Repo(c), w).expect("validated piece")]
 }
-fn and_all<C: CircuitContext>(c: &mut C, w: &[WireId]) -> Vec<WireId> {
+pub(crate) fn and_all<C: CircuitContext>(c: &mut C, w: &[WireId]) -> Vec<WireId> {
     let mut repo = Repo(c);
     let mut all = TRUE_WIRE;
     for wire in w {

@@ -3,17 +3,24 @@
 mod count;
 mod direct;
 mod evidence;
+mod func;
 #[cfg(feature = "garbled")]
 mod garble;
+#[cfg(feature = "garbled")]
+mod gfunc;
 mod lab_config;
 mod shard;
+
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use anyhow::{bail, Context as _, Result};
 use circuit_cairo_verifier::verify::build_cairo_verifier_circuit;
 use circuits::{context::FinalizedContext, ivalue::NoValue};
 use privacy_circuit_verify::get_cairo_verifier_config;
 use std::time::Instant;
 use stwo_bitvm3_lowering::{Limits, Program};
-use stwo_bitvm3_upstream::import_finalized;
+use stwo_bitvm3_upstream::{import_finalized, import_function};
 
 fn report(name: &str, template: &FinalizedContext<NoValue>, with_boolean: bool, analytic: bool) -> Result<()> {
     let start = Instant::now();
@@ -123,6 +130,16 @@ fn main() -> Result<()> {
             Ok(())
         }
         #[cfg(feature = "garbled")]
+        Some("garble-func") => garble_function(evidence::load_fixture(std::path::Path::new(args.get(2).context("fixture directory")?))?),
+        #[cfg(feature = "garbled")]
+        Some("garble-func-lab") => {
+            let (fixture, _receipt) = evidence::load_lab(
+                std::path::Path::new(args.get(2).context("recursion_raw.bin")?),
+                &std::fs::read_to_string(args.get(3).context("output_preimage.json")?)?,
+            )?;
+            garble_function(fixture)
+        }
+        #[cfg(feature = "garbled")]
         Some("garble") => garble_check(evidence::load_fixture(std::path::Path::new(args.get(2).context("fixture directory")?))?),
         #[cfg(feature = "garbled")]
         Some("garble-lab") => {
@@ -131,6 +148,22 @@ fn main() -> Result<()> {
                 &std::fs::read_to_string(args.get(3).context("output_preimage.json")?)?,
             )?;
             garble_check(fixture)
+        }
+        Some("final-func") => {
+            let shared = match args.get(2).map(String::as_str) {
+                Some("fixture") => evidence::fixture_shared(),
+                Some("lab") => evidence::lab_shared()?,
+                _ => evidence::production_shared()?,
+            };
+            function_report(&evidence::template(&shared))
+        }
+        Some("check-func") => check_function(evidence::load_fixture(std::path::Path::new(args.get(2).context("fixture directory")?))?, light),
+        Some("check-func-lab") => {
+            let (fixture, _receipt) = evidence::load_lab(
+                std::path::Path::new(args.get(2).context("recursion_raw.bin")?),
+                &std::fs::read_to_string(args.get(3).context("output_preimage.json")?)?,
+            )?;
+            check_function(fixture, light)
         }
         Some("lab-root") => {
             // Recompute the L21 Cairo-verifier circuit's preprocessed root from the pinned profile alone.
@@ -141,16 +174,13 @@ fn main() -> Result<()> {
             anyhow::ensure!(root == lab_config::CIRCUIT_PREPROCESSED_ROOT, "pinned circuit root differs from the recomputed one");
             Ok(())
         }
-        _ => bail!("usage: s4 final|final-fixture|final-lab|cairo [--boolean] [--analytic] | check FIXTURE_DIR | check-prod RAW DIGEST_FILE | check-lab RAW PREIMAGE_JSON [--light] | lab-root | (feature garbled) garble FIXTURE_DIR | garble-lab RAW PREIMAGE_JSON"),
+        _ => bail!("usage: s4 final|final-fixture|final-lab|cairo [--boolean] [--analytic] | check FIXTURE_DIR | check-prod RAW DIGEST_FILE | check-lab RAW PREIMAGE_JSON [--light] | lab-root | final-func [prod|lab|fixture] | check-func FIXTURE_DIR [--light] | check-func-lab RAW PREIMAGE_JSON [--light] | (feature garbled) garble FIXTURE_DIR | garble-lab RAW PREIMAGE_JSON | garble-func FIXTURE_DIR | garble-func-lab RAW PREIMAGE_JSON"),
     }
 }
 
 /// Native acceptance, Boolean acceptance and mutation rejection for a proof of the privacy Cairo-verifier circuit.
 fn check(fixture: evidence::Fixture, light: bool) -> Result<()> {
-    use circuits_stark_verifier::proof::Proof;
-    use stwo::core::fields::qm31::QM31;
     let start = Instant::now();
-    let one = QM31::from_u32_unchecked(1, 0, 0, 0);
     println!("check: proof under test: {}", fixture.label);
     let valid = evidence::context(&fixture, &fixture.proof);
     anyhow::ensure!(valid.is_circuit_valid(), "the native relation rejected the proof");
@@ -192,16 +222,7 @@ fn check(fixture: evidence::Fixture, light: bool) -> Result<()> {
     anyhow::ensure!(ok, "the Boolean relation rejected the proof");
 
     // Mutations: every internal value is re-derived for the changed proof against the same trusted template.
-    let mut cases: Vec<(&str, Proof<QM31>)> = Vec::new();
-    let p = &fixture.proof;
-    let mut m = p.clone(); m.trace_at_oods[0] += one; cases.push(("trace_at_oods[0]+1", m));
-    let mut m = p.clone(); m.claimed_sums[0] += one; cases.push(("claimed_sums[0]+1", m));
-    let mut m = p.clone(); m.fri.commit.last_layer_coefs[0] += one; cases.push(("fri_last_layer_coef+1", m));
-    let mut m = p.clone(); m.oods_pow_nonce += one; cases.push(("oods_pow_nonce+1", m));
-    let mut m = p.clone();
-    if let Some(x) = m.fri.witness.0.iter_mut().flatten().flatten().next() { *x += one; }
-    cases.push(("fri_witness_first+1", m));
-    let mut m = p.clone(); m.channel_salt += one; cases.push(("channel_salt+1", m));
+    let mut cases = proof_mutations(&fixture.proof);
     if light {
         cases.clear();
         println!("check: proof mutations skipped (--light)");
@@ -295,6 +316,193 @@ fn garble_check(fixture: evidence::Fixture) -> Result<()> {
     anyhow::ensure!(!accept && rejecting > 0 && label_ok, "the garbled circuit did not reject the mutated proof");
     println!(
         "garble: garbling and both evaluations took {:.1}s on {threads} threads; all checks passed in {:.1}s",
+        out.seconds, start.elapsed().as_secs_f64()
+    );
+    Ok(())
+}
+
+/// Six independent changes of a proof, each to a different part of it.
+fn proof_mutations(
+    p: &circuits_stark_verifier::proof::Proof<stwo::core::fields::qm31::QM31>,
+) -> Vec<(&'static str, circuits_stark_verifier::proof::Proof<stwo::core::fields::qm31::QM31>)> {
+    let one = stwo::core::fields::qm31::QM31::from_u32_unchecked(1, 0, 0, 0);
+    let mut cases = Vec::new();
+    let mut m = p.clone(); m.trace_at_oods[0] += one; cases.push(("trace_at_oods[0]+1", m));
+    let mut m = p.clone(); m.claimed_sums[0] += one; cases.push(("claimed_sums[0]+1", m));
+    let mut m = p.clone(); m.fri.commit.last_layer_coefs[0] += one; cases.push(("fri_last_layer_coef+1", m));
+    let mut m = p.clone(); m.oods_pow_nonce += one; cases.push(("oods_pow_nonce+1", m));
+    let mut m = p.clone();
+    if let Some(x) = m.fri.witness.0.iter_mut().flatten().flatten().next() { *x += one; }
+    cases.push(("fri_witness_first+1", m));
+    let mut m = p.clone(); m.channel_salt += one; cases.push(("channel_salt+1", m));
+    cases
+}
+
+const FUNCTION_LIMITS: Limits = Limits {
+    max_vars: 64_000_000, max_constraints: 64_000_000,
+    max_permutation: 1 << 22, max_permutation_work: usize::MAX / 4,
+};
+/// Pieces of about a million non-free ANDs (by estimate), at most 20,000 gates.
+const PIECE_ANDS: u64 = 1_000_000;
+const PIECE_STEPS: usize = 20_000;
+
+fn function_plan(f: &stwo_bitvm3_lowering::Function) -> Result<func::Plan<'_>> {
+    let env = |name: &str| std::env::var(name).ok().and_then(|t| t.parse::<u64>().ok());
+    let layers = env("S6_LAYERS").map(|x| x as usize).unwrap_or(func::DEFAULT_LAYERS);
+    func::Plan::layered(f, env("S6_PIECE_ANDS").unwrap_or(PIECE_ANDS), PIECE_STEPS, layers)
+}
+
+/// The gate count of a plan; it does not depend on the input.
+fn run_count(plan: &func::Plan, f: &stwo_bitvm3_lowering::Function) -> Result<u64> {
+    Ok(func::run_direct(plan, &vec![false; f.input_bits()], None, worker_threads())?.ands)
+}
+
+fn worker_threads() -> usize {
+    std::env::var("S5_THREADS").ok().and_then(|t| t.parse().ok())
+        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16))
+}
+
+/// The statement inputs of the final verifier in function form: the first 32 typed inputs are the 16-bit
+/// halves of the eight digest words and then of the eight root words (the order `verify_child` guesses them).
+fn statement_input_bits(digest: [u32; 8], root: [u32; 8]) -> Vec<bool> {
+    digest.iter().chain(&root).flat_map(|w| (0..32).map(move |i| (w >> i) & 1 != 0)).collect()
+}
+
+/// S6: sizes of the final verifier read as a function of its typed inputs.
+fn function_report(template: &FinalizedContext<NoValue>) -> Result<()> {
+    use stwo_bitvm3_lowering::Kind;
+    let start = Instant::now();
+    let f = import_function(template, FUNCTION_LIMITS).context("function form")?;
+    let count = |kind: Kind| f.inputs().iter().filter(|(_, k)| *k == kind).count();
+    println!(
+        "func: inputs {} (u16 {}, m31 {}, qm31 {}) = {} input bits; relation form reads {} variables = {} bits",
+        f.inputs().len(), count(Kind::U16), count(Kind::M31), count(Kind::Qm31), f.input_bits(), f.n_vars(), f.n_vars() * 128
+    );
+    anyhow::ensure!(f.inputs().len() as u64 == template.stats().guess as u64, "typed inputs differ from the guess count of upstream");
+    anyhow::ensure!(f.inputs()[..32].iter().all(|(_, k)| *k == Kind::U16), "the statement inputs are not 32 16-bit values");
+    let plan = function_plan(&f)?;
+    let stats = plan.stats();
+    println!(
+        "func: {} steps in {} pieces over {} depth layers, longest chain of pieces {}, {} carried variables, at most {} alive at once; inputs read {} unread {}",
+        f.steps().len(), stats.pieces, stats.layers, stats.depth, stats.carried_variables, stats.max_live, stats.inputs_read, stats.inputs_unread
+    );
+    println!(
+        "func: estimated work {} of which the heaviest chain of pieces {} (parallel speed-up at most {:.1})",
+        stats.total_cost, stats.critical_cost, stats.total_cost as f64 / stats.critical_cost.max(1) as f64
+    );
+    if std::env::var("S6_PLAN_ONLY").is_ok() {
+        return Ok(());
+    }
+    println!("func: non_free_AND={} XOR={} ({:.1}s)", run_count(&plan, &f)?, 0, start.elapsed().as_secs_f64());
+    Ok(())
+}
+
+/// S6: the function form on a real proof. It must compute upstream's own witness, accept it, and reject
+/// changed proofs, changed statements and non-canonical inputs.
+fn check_function(fixture: evidence::Fixture, light: bool) -> Result<()> {
+    use stwo_bitvm3_lowering::Kind;
+    let start = Instant::now();
+    println!("func: proof under test: {}", fixture.label);
+    let valid = evidence::context(&fixture, &fixture.proof);
+    anyhow::ensure!(valid.is_circuit_valid(), "the native relation rejected the proof");
+    let template = evidence::template(&fixture.shared);
+    anyhow::ensure!(valid.circuit() == template.circuit(), "the proof-bearing circuit differs from the template");
+    let f = import_function(&template, FUNCTION_LIMITS).context("function form")?;
+    let plan = function_plan(&f)?;
+    let threads = worker_threads();
+    let good = evidence::values(&valid);
+    let honest = f.encode(&good)?;
+    let statement = statement_input_bits(fixture.digest, fixture.root);
+    anyhow::ensure!(f.inputs()[..32].iter().all(|(_, k)| *k == Kind::U16), "the statement inputs are not 32 16-bit values");
+    anyhow::ensure!(honest[..512] == statement[..], "the first 512 input bits are not the statement (digest, root)");
+    println!(
+        "func: {} input bits = 512 statement bits (digest, root) + {} proof bits; {} pieces on {threads} threads",
+        f.input_bits(), f.input_bits() - 512, plan.pieces.len()
+    );
+
+    let run = func::run_direct(&plan, &honest, Some(&good), threads)?;
+    println!(
+        "func: honest input: accepted={} non_free_AND={} computed variables compared with upstream {} mismatches {} ({:.1}s)",
+        run.accepted, run.ands, run.compared, run.mismatches, start.elapsed().as_secs_f64()
+    );
+    anyhow::ensure!(run.accepted && run.mismatches == 0, "the function form disagrees with upstream on the honest proof");
+
+    // `--light` keeps the first of the six proof mutations.
+    for (name, bad) in proof_mutations(&fixture.proof).into_iter().take(if light { 1 } else { 6 }) {
+        let ctx = evidence::context(&fixture, &bad);
+        anyhow::ensure!(ctx.circuit() == template.circuit(), "mutation changed the graph: {name}");
+        let native_ok = ctx.is_circuit_valid();
+        let values = evidence::values(&ctx);
+        let run = func::run_direct(&plan, &f.encode(&values)?, Some(&values), threads)?;
+        println!(
+            "func: mutation {name}: native_accepts={native_ok} function_accepts={} rejecting_pieces={} mismatches_with_upstream={}",
+            run.accepted, run.rejecting_pieces, run.mismatches
+        );
+        anyhow::ensure!(!native_ok && !run.accepted && run.mismatches == 0, "mutation mishandled: {name}");
+    }
+    // The statement is input: one changed bit of the digest, or of the root, must be rejected.
+    for (name, bit) in [("digest", 0usize), ("root", 256)] {
+        let mut input = honest.clone();
+        input[bit] = !input[bit];
+        let run = func::run_direct(&plan, &input, None, threads)?;
+        println!("func: one {name} bit changed in the statement input: function_accepts={}", run.accepted);
+        anyhow::ensure!(!run.accepted, "a changed statement was accepted: {name}");
+    }
+    // A non-canonical field input (a 31-bit limb equal to P) must be rejected at the input boundary.
+    let (index, _) = f.inputs().iter().enumerate().find(|(_, (_, k))| *k != Kind::U16).context("no field input")?;
+    let mut input = honest.clone();
+    for bit in &mut input[f.offset(index)..f.offset(index) + 31] { *bit = true; }
+    let run = func::run_direct(&plan, &input, None, threads)?;
+    anyhow::ensure!(!run.accepted, "a non-canonical input limb was accepted");
+    println!("func: non-canonical input limb rejected; all checks passed in {:.1}s", start.elapsed().as_secs_f64());
+    Ok(())
+}
+
+/// S6: garbles the final verifier in function form once and evaluates it on the honest proof and on a
+/// changed proof. The statement is part of the input, so the garbling does not depend on it.
+#[cfg(feature = "garbled")]
+fn garble_function(fixture: evidence::Fixture) -> Result<()> {
+    let start = Instant::now();
+    println!("garble-func: proof under test: {}", fixture.label);
+    let valid = evidence::context(&fixture, &fixture.proof);
+    anyhow::ensure!(valid.is_circuit_valid(), "the native relation rejected the proof");
+    let template = evidence::template(&fixture.shared);
+    anyhow::ensure!(valid.circuit() == template.circuit(), "the proof-bearing circuit differs from the template");
+    let f = import_function(&template, FUNCTION_LIMITS).context("function form")?;
+    let plan = function_plan(&f)?;
+    let good = evidence::values(&valid);
+    let honest = f.encode(&good)?;
+    anyhow::ensure!(honest[..512] == statement_input_bits(fixture.digest, fixture.root)[..], "the first 512 input bits are not the statement");
+    let (name, mutated) = proof_mutations(&fixture.proof).swap_remove(0);
+    let bad_context = evidence::context(&fixture, &mutated);
+    anyhow::ensure!(bad_context.circuit() == template.circuit(), "the mutation changed the graph");
+    anyhow::ensure!(!bad_context.is_circuit_valid(), "the native relation accepted the mutated proof");
+    let bad = evidence::values(&bad_context);
+    let changed = f.encode(&bad)?;
+    let threads = worker_threads();
+    let stats = plan.stats();
+    println!(
+        "garble-func: {} input bits (512 statement + {} proof), {} steps in {} pieces over {} depth layers (longest chain {}), {threads} threads ({:.1}s)",
+        f.input_bits(), f.input_bits() - 512, f.steps().len(), stats.pieces, stats.layers, stats.depth, start.elapsed().as_secs_f64()
+    );
+    let out = gfunc::run(&plan, [&honest, &changed], [&good, &bad], threads, 117)?;
+    println!(
+        "garble-func: {} pieces under one delta, {} ciphertexts ({} bytes at 16 bytes each), {} gates in all, commitment blake3 {}",
+        out.pieces, out.ciphertexts, out.ciphertexts * 16, out.gates, hex::encode(out.commitment)
+    );
+    println!(
+        "garble-func: {} labels of wires handed between pieces checked against the garbler; {} handed-on values compared with upstream, {} differ; worst fan-out {}",
+        out.handed_on_wires, out.compared, out.mismatches, out.worst_fanout
+    );
+    anyhow::ensure!(out.mismatches == 0, "garbled evaluation disagrees with upstream on handed-on values");
+    let (accept, rejecting, label_ok) = out.verdicts[0];
+    println!("garble-func: honest proof: accepted={accept} rejecting_pieces={rejecting} output_label_is_the_accept_label={label_ok}");
+    anyhow::ensure!(accept && rejecting == 0 && label_ok, "the garbled function did not accept the honest proof");
+    let (accept, rejecting, label_ok) = out.verdicts[1];
+    println!("garble-func: mutated proof ({name}): accepted={accept} rejecting_pieces={rejecting} output_label_is_the_reject_label={label_ok}");
+    anyhow::ensure!(!accept && rejecting > 0 && label_ok, "the garbled function did not reject the mutated proof");
+    println!(
+        "garble-func: garbling and both evaluations took {:.1}s on {threads} threads; all checks passed in {:.1}s",
         out.seconds, start.elapsed().as_secs_f64()
     );
     Ok(())

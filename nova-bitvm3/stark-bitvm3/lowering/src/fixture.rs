@@ -24,3 +24,21 @@ pub fn all_gate_fixture()->(Program,Vec<Value>){
         G::Eq{a:7,b:23},G::Output{input:23}];
     (Program::new(v.len(),gates,vec![(23,iu)],Limits::default()).unwrap(),v)
 }
+
+/// The all-gate fixture as a computation: the free variables of `all_gate_fixture` carry the marker
+/// gates upstream's finalization would add, plus one 16-bit guess and a gate that uses it. The outputs of
+/// the permutation gate are not guesses: they hold its inputs in ascending order, which is what the
+/// function form computes.
+/// Returns (variable count, gates, constants, a satisfying assignment).
+pub fn function_fixture()->(usize,Vec<G>,Vec<(usize,Value)>,Vec<Value>){
+    let (program,mut v)=all_gate_fixture();
+    let mut gates:Vec<G>=program.constraints().to_vec();
+    for var in [3,4,9,10,11,12,23] {gates.push(G::Add{a:var,b:0,out:var});}
+    // [i,i,u] sorted as 124-bit integers: i sets bit 31, u sets bit 62.
+    v[20]=[0,1,0,0];v[21]=[0,1,0,0];v[22]=[0,0,1,0];
+    gates.push(G::PointwiseMul{a:14,b:1,out:14});
+    v.push([65535,0,0,0]);v.push([131070,0,0,0]);
+    gates.push(G::M31ToU32{input:24,out:24});
+    gates.push(G::Add{a:24,b:24,out:25});
+    (v.len(),gates,vec![(0,[0;4]),(1,[1,0,0,0]),(2,[0,0,1,0])],v)
+}
