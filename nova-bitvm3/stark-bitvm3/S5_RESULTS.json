@@ -125,7 +125,35 @@
     "garble::tests::input_labels_depend_only_on_global_position",
     "shard::tests::sharding_never_changes_the_verdict"
   ],
-  "ci": "pending",
+  "ci": {
+    "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42962782742",
+    "commit": "dac161c",
+    "job": "s5-garble",
+    "result": "success",
+    "job_minutes": 19.3,
+    "threads": 4,
+    "rustflags": "-C debuginfo=0 -C target-feature=+aes",
+    "pieces": 1179,
+    "ciphertexts": 4893461084,
+    "gates_total": 14116702681,
+    "commitment_blake3": "517d4e1ab80706b5d3a8d8b1e99126611dc225dd50d9a35b40912c46f9d28621",
+    "commitment_equals_local": true,
+    "honest_witness_output_label_is_accept_label": true,
+    "mutated_proof_output_label_is_reject_label": true,
+    "mutated_proof_rejecting_pieces": 16,
+    "garble_and_evaluate_seconds": 745.2,
+    "peak_rss_kib": 5318040,
+    "fanout_shard_1000": {
+      "pieces": 1178,
+      "worst": 35002,
+      "pieces_over_limit": 0
+    },
+    "unit_tests": "3 passed",
+    "artifact": "stwo-s5-garble-dac161c2f997e69122d7fb66ccf5cbef3dbda6f6",
+    "artifact_zip_digest": "sha256:5c1b417d9f93a503337b5f162a9f819bfc86bef4840b1bf467af7cb448df41b9",
+    "s4_verifier_circuit_job_same_run": "success (checks unchanged after the sharding refactor)",
+    "code_checks_workflow": "run 42962782756 failed on spelling and unused-dependency jobs, as it has on main for the preceding runs (42 to 48); its formatting job passed for this commit"
+  },
   "not_established": [
     "Bitcoin script, transactions or a dispute game",
     "oblivious transfer or on-chain commitments for input labels",
@@ -137,5 +165,6 @@
     "full_shinigami_stark": "laboratory profile L21 only",
     "bitvm3_dispute_protocol": false,
     "ark_utxoref_state": false
-  }
+  },
+  "code_commit": "dac161c"
 }
