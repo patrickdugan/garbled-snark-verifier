@@ -4,9 +4,13 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 license = "GPL-3.0-only"
-description = "Measures the Boolean size of the pinned Cairo circuit verifier template; no proof, no garbling"
+description = "Boolean lowering of the pinned Stwo circuit verifiers: sizes, real-proof checks, Shinigami receipts, optional full-size garbling"
 
 [workspace]
+
+[features]
+# S5: full-size garbling on the repository's half-gates engine (off by default; adds the parent crate).
+garbled = ["dep:garbled-snark-verifier", "dep:stwo-bitvm3-adapter", "dep:rand", "dep:rand_chacha", "dep:blake3"]
 
 [dependencies]
 anyhow = "1"
@@ -30,6 +34,11 @@ cairo-air = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12
 circuit-common = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
 stwo_cairo_common = { package = "stwo-cairo-common", git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
 starknet-types-core = { version = "=0.2.4", features = ["hash", "prime-bigint", "serde", "curve", "num-traits"] }
+garbled-snark-verifier = { path = "../../..", default-features = false, optional = true }
+stwo-bitvm3-adapter = { path = "../adapter", optional = true }
+rand = { version = "0.8", optional = true }
+rand_chacha = { version = "0.3", optional = true }
+blake3 = { version = "1.6.1", optional = true }
 
 [dev-dependencies]
 stwo-bitvm3-lowering = { path = "../lowering", features = ["test-utils"] }

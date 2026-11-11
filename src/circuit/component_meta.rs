@@ -92,7 +92,11 @@ impl ComponentMetaBuilder {
                     .get_mut(idx)
                     .expect("internal wire out of bounds");
 
-                *slot += credit.get();
+                // A wrapped counter would free the wire early and corrupt the execution pass, so a
+                // fan-out beyond the counter is a hard error in every build profile.
+                *slot = slot
+                    .checked_add(credit.get())
+                    .expect("wire fan-out exceeds the 16-bit credit counter");
             }
             id => {
                 // Wire ID from outside our isolated mock range - ignore

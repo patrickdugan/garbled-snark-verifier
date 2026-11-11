@@ -47,72 +47,98 @@ fn limits() -> Limits {
     Limits { max_vars: 1 << 22, max_constraints: 1 << 22, max_permutation: 1 << 22, max_permutation_work: usize::MAX / 4 }
 }
 
-/// Lowers one shard: the given constraints, or, with none, a group of otherwise unreferenced variables.
-fn run_shard(program: &Program, values: &[Value], constraints: &[C], extra_vars: &[usize]) -> Result<(bool, u64)> {
-    let mut order: BTreeSet<usize> = extra_vars.iter().copied().filter(|v| *v >= 3).collect();
-    for c in constraints {
-        order.extend(vars(c).into_iter().filter(|v| *v >= 3));
+/// One piece of a program: its own small program and, for each local variable, the global variable it
+/// stands for (`globals[local] = global`; locals 0..2 are the base constants and map to themselves).
+pub struct Piece {
+    pub program: Program,
+    pub globals: Vec<usize>,
+}
+impl Piece {
+    pub fn values(&self, values: &[Value]) -> Vec<Value> {
+        self.globals.iter().map(|g| values[*g]).collect()
     }
-    let map: BTreeMap<usize, usize> = order.iter().enumerate().map(|(i, g)| (*g, 3 + i)).collect();
-    let f = |v: usize| if v < 3 { v } else { map[&v] };
-    let local: Vec<C> = constraints.iter().map(|c| remap(c, &f)).collect();
-    let bindings: Vec<(usize, Value)> =
-        order.iter().filter_map(|g| program.bindings().get(g).map(|val| (map[g], *val))).collect();
-    let sub = Program::new(3 + order.len(), local, bindings, limits())?;
-    let mut local_values: Vec<Value> = vec![values[0], values[1], values[2]];
-    local_values.extend(order.iter().map(|g| values[*g]));
-    let (ok, ands, _xors) = direct::run(&sub, &local_values)?;
-    Ok((ok, ands))
+}
+
+/// A fixed split of a program into pieces: slices of the constraint list, then groups of variables that no
+/// constraint touches (they still need their range and binding checks). Depends only on the program.
+pub struct Plan<'a> {
+    program: &'a Program,
+    unused: Vec<usize>,
+    /// (start, end, is_var_group)
+    jobs: Vec<(usize, usize, bool)>,
+}
+impl<'a> Plan<'a> {
+    pub fn new(program: &'a Program, shard_size: usize) -> Self {
+        let constraints = program.constraints();
+        let mut used = BTreeSet::new();
+        for c in constraints {
+            used.extend(vars(c));
+        }
+        let unused: Vec<usize> = (3..program.n_vars()).filter(|v| !used.contains(v)).collect();
+        let mut jobs = Vec::new();
+        for start in (0..constraints.len()).step_by(shard_size) {
+            jobs.push((start, (start + shard_size).min(constraints.len()), false));
+        }
+        for start in (0..unused.len()).step_by(shard_size * 4) {
+            jobs.push((start, (start + shard_size * 4).min(unused.len()), true));
+        }
+        Self { program, unused, jobs }
+    }
+    pub fn len(&self) -> usize {
+        self.jobs.len()
+    }
+    pub fn piece(&self, index: usize) -> Result<Piece> {
+        let (s, e, is_vars) = self.jobs[index];
+        let (constraints, extra): (&[C], &[usize]) =
+            if is_vars { (&[], &self.unused[s..e]) } else { (&self.program.constraints()[s..e], &[]) };
+        let mut order: BTreeSet<usize> = extra.iter().copied().filter(|v| *v >= 3).collect();
+        for c in constraints {
+            order.extend(vars(c).into_iter().filter(|v| *v >= 3));
+        }
+        let map: BTreeMap<usize, usize> = order.iter().enumerate().map(|(i, g)| (*g, 3 + i)).collect();
+        let f = |v: usize| if v < 3 { v } else { map[&v] };
+        let local: Vec<C> = constraints.iter().map(|c| remap(c, &f)).collect();
+        let bindings: Vec<(usize, Value)> =
+            order.iter().filter_map(|g| self.program.bindings().get(g).map(|val| (map[g], *val))).collect();
+        let program = Program::new(3 + order.len(), local, bindings, limits())?;
+        let globals: Vec<usize> = [0, 1, 2].into_iter().chain(order).collect();
+        Ok(Piece { program, globals })
+    }
+}
+
+/// Runs `job` for every piece index on `threads` threads and returns the results in piece order.
+pub fn for_each_piece<T: Send>(count: usize, threads: usize, job: impl Fn(usize) -> Result<T> + Sync) -> Result<Vec<T>> {
+    let next = AtomicUsize::new(0);
+    let results: std::sync::Mutex<Vec<Option<Result<T>>>> = std::sync::Mutex::new((0..count).map(|_| None).collect());
+    std::thread::scope(|scope| {
+        for _ in 0..threads.max(1) {
+            scope.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, Ordering::SeqCst);
+                    if i >= count {
+                        break;
+                    }
+                    let out = job(i);
+                    results.lock().unwrap()[i] = Some(out);
+                }
+            });
+        }
+    });
+    results.into_inner().unwrap().into_iter().map(|r| r.expect("every piece ran")).collect()
 }
 
 /// Returns (accepted, number of shards, summed non-free ANDs including per-shard decode duplication).
 pub fn run(program: &Program, values: &[Value], shard_size: usize, threads: usize) -> Result<(bool, usize, u64)> {
     anyhow::ensure!(values.len() == program.n_vars(), "witness length {} != {}", values.len(), program.n_vars());
-    let constraints = program.constraints();
-    let mut used = BTreeSet::new();
-    for c in constraints {
-        used.extend(vars(c));
-    }
-    let unused: Vec<usize> = (3..program.n_vars()).filter(|v| !used.contains(v)).collect();
-    // (start, end, is_var_group)
-    let mut jobs: Vec<(usize, usize, bool)> = Vec::new();
-    for start in (0..constraints.len()).step_by(shard_size) {
-        jobs.push((start, (start + shard_size).min(constraints.len()), false));
-    }
-    for start in (0..unused.len()).step_by(shard_size * 4) {
-        jobs.push((start, (start + shard_size * 4).min(unused.len()), true));
-    }
-    let next = AtomicUsize::new(0);
-    let results = std::sync::Mutex::new((true, 0u64, 0usize));
-    std::thread::scope(|scope| {
-        for _ in 0..threads {
-            scope.spawn(|| {
-                loop {
-                    let i = next.fetch_add(1, Ordering::SeqCst);
-                    if i >= jobs.len() {
-                        break;
-                    }
-                    let (s, e, is_vars) = jobs[i];
-                    let out = if is_vars {
-                        run_shard(program, values, &[], &unused[s..e])
-                    } else {
-                        run_shard(program, values, &constraints[s..e], &[])
-                    };
-                    let mut guard = results.lock().unwrap();
-                    match out {
-                        Ok((ok, ands)) => {
-                            guard.0 &= ok;
-                            guard.1 += ands;
-                        }
-                        Err(_) => guard.0 = false,
-                    }
-                    guard.2 += 1;
-                }
-            });
-        }
-    });
-    let (ok, ands, shards) = results.into_inner().unwrap();
-    Ok((ok, shards, ands))
+    let plan = Plan::new(program, shard_size);
+    let outcomes = for_each_piece(plan.len(), threads, |i| {
+        let piece = plan.piece(i)?;
+        let (ok, ands, _xors) = direct::run(&piece.program, &piece.values(values))?;
+        Ok((ok, ands))
+    })?;
+    let ok = outcomes.iter().all(|(ok, _)| *ok);
+    let ands = outcomes.iter().map(|(_, ands)| ands).sum();
+    Ok((ok, plan.len(), ands))
 }
 
 #[cfg(test)]

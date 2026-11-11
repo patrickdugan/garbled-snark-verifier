@@ -1,8 +1,12 @@
 # Direct Stwo-to-Boolean prototype
 
+## S5: the whole final verifier garbled and evaluated on a Shinigami proof
+
+The 4.78-billion-AND final verifier is garbled with the repository's half-gates engine as one circuit in 1,179 pieces under one delta: 4,893,461,084 ciphertexts (a 78.3 GB stream, hashed and not stored), 5.5 minutes and 11.5 GB on a laptop. Evaluated on the Shinigami `csv_valid` proof it yields the garbler's accept label; on a mutated proof, the reject label. Input labels are selected directly and the statement is a circuit constant (laboratory conventions); there is still no Bitcoin script. See [S5.md](S5.md) and [S5_RESULTS.json](S5_RESULTS.json).
+
 ## S4: Shinigami receipts accepted by the Boolean relation of the Stwo final verifier
 
-The unmodified 169,856-word Shinigami executable is proved as a task of upstream's privacy bootloader (laboratory profile L21), recursed into a 1-to-1 circuit proof, and accepted by the Boolean lowering of the final verifier: 4,783,261,848 non-free ANDs, gate for gate the production verifier of `starkware-libs/proving` at `e9a38e12`. Four receipts are committed (CSV and SHA256 hashlock, accepted and rejected); proof mutations, statement mutations and a non-canonical alias are rejected. The statement (circuit root, output digest, program hash, receipt) is derived by the checker, never read from the witness. Proving takes about 40 s and 15.4 GB on a laptop; the checker needs 1.6 GB. Nothing is garbled at this size yet and no Bitcoin script exists. See [S4.md](S4.md), [S4_RESULTS.json](S4_RESULTS.json) and [NEXT.md](NEXT.md).
+The unmodified 169,856-word Shinigami executable is proved as a task of upstream's privacy bootloader (laboratory profile L21), recursed into a 1-to-1 circuit proof, and accepted by the Boolean lowering of the final verifier: 4,783,261,848 non-free ANDs, gate for gate the production verifier of `starkware-libs/proving` at `e9a38e12`. Four receipts are committed (CSV and SHA256 hashlock, accepted and rejected); proof mutations, statement mutations and a non-canonical alias are rejected. The statement (circuit root, output digest, program hash, receipt) is derived by the checker, never read from the witness. Proving takes about 40 s and 15.4 GB on a laptop; the checker needs 1.6 GB. See [S4.md](S4.md), [S4_RESULTS.json](S4_RESULTS.json) and [NEXT.md](NEXT.md).
 
 ## S3q: native Shinigami proof
 

@@ -71,6 +71,10 @@ on:
         description: 'Size the pinned Stwo circuit verifiers and check the committed production-sized proof through the Boolean lowering'
         type: boolean
         default: false
+      s5_garble:
+        description: 'Garble the whole final verifier in pieces and evaluate it on the committed Shinigami proof'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -683,5 +687,60 @@ jobs:
         if: always()
         with:
           name: stwo-s4-verifier-circuit-${{ github.sha }}
+          path: nova-bitvm3/stark-bitvm3/s4-cairo/out/
+          if-no-files-found: warn
+  s5-garble:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.s5_garble) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[s5-garble]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CARGO_BUILD_JOBS: '4'
+      CARGO_INCREMENTAL: '0'
+      # The engine's AES-NI hasher is selected at compile time; +aes is present on every hosted x86_64 runner.
+      RUSTFLAGS: '-C debuginfo=0 -C target-feature=+aes'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-01-15
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nova-bitvm3/stark-bitvm3/s4-cairo
+          key: garbled
+          cache-on-failure: true
+      - name: Build and unit-test the garbling feature
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          cargo +nightly-2026-01-15 build --release --locked --features garbled 2>&1 | tail -3
+          cargo +nightly-2026-01-15 test --release --locked --features garbled 2>&1 | tee out/garble-unit-tests.txt | grep -E "^test |test result"
+      - name: Garble the final verifier and evaluate it on the Shinigami proof
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=target/release/stwo-bitvm3-s4-cairo
+          (cd fixtures/shinigami && sha256sum -c SHA256SUMS)
+          nproc | tee out/garble-nproc.txt
+          /usr/bin/time -v timeout --kill-after=5s 5400s "$BIN" fanout 1000 2>&1 | tee out/fanout.txt
+          /usr/bin/time -v timeout --kill-after=5s 5400s "$BIN" garble-lab fixtures/shinigami/csv_valid/recursion_raw.bin fixtures/shinigami/csv_valid/output_preimage.json 2>&1 | tee out/garble-csv_valid.txt
+      - name: Publish compact garbling evidence as annotations
+        if: always()
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          join() { paste -sd'|' | sed 's/|/ | /g'; }
+          echo "::notice title=S5 garbling::$(grep -E '^garble:' out/garble-csv_valid.txt | join)"
+          echo "::notice title=S5 resources::$(grep -E 'Maximum resident|Elapsed' out/garble-csv_valid.txt | sed 's/^\s*//' | join) | threads $(cat out/garble-nproc.txt)"
+          echo "::notice title=S5 fan-out::$(grep -E '^fanout: shard' out/fanout.txt | join)"
+          echo "::notice title=S5 unit tests::$(grep -E '^test |test result' out/garble-unit-tests.txt | join)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stwo-s5-garble-${{ github.sha }}
           path: nova-bitvm3/stark-bitvm3/s4-cairo/out/
           if-no-files-found: warn

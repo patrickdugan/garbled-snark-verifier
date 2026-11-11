@@ -1,0 +1,141 @@
+{
+  "schema": 1,
+  "stage": "S5 the whole final verifier as one garbled circuit, evaluated on a Shinigami proof",
+  "base_head": "64bdaf4",
+  "engine": "repository half-gates engine (garbled-snark-verifier, AesCcrGateHasher), streaming garble and evaluate modes",
+  "engine_changes": {
+    "src/circuit/modes/garble_mode.rs": "GarbleMode::with_first_gate_index",
+    "src/circuit/modes/evaluate_mode.rs": "EvaluateMode::with_first_gate_index",
+    "src/circuit/component_meta.rs": "checked addition on the 16-bit credit counter (was an unchecked += that wraps in release builds)"
+  },
+  "construction": {
+    "pieces": "1178 pieces of at most 1000 constraints plus one combining AND chain",
+    "one_delta_and_hasher_key": true,
+    "input_labels": "keyed BLAKE3 of (global variable, bit); one pair per raw input bit across all pieces",
+    "gate_index_range_per_piece": "index << 36",
+    "ciphertexts_stored": false,
+    "commitment": "BLAKE3 over the per-piece BLAKE3 ciphertext hashes in piece order, the combining piece last",
+    "seed": 117
+  },
+  "program": {
+    "n_vars": 2961135,
+    "constraints": 1177730,
+    "raw_input_bits": 379025280,
+    "monolithic_non_free_and": 4783261848
+  },
+  "runs": {
+    "csv_valid": {
+      "statement_output_words": [
+        "8023adca",
+        "a7ad7e1c",
+        "a75b2beb",
+        "10ee0682",
+        "5f353c56",
+        "fd4d20ba",
+        "fa6ef686",
+        "9b9736ba"
+      ],
+      "pieces": 1179,
+      "ciphertexts": 4893461084,
+      "ciphertext_bytes": 78295377344,
+      "gates_total": 14116702681,
+      "commitment_blake3": "517d4e1ab80706b5d3a8d8b1e99126611dc225dd50d9a35b40912c46f9d28621",
+      "honest_witness": {
+        "accepted": true,
+        "rejecting_pieces": 0,
+        "output_label_is_accept_label": true
+      },
+      "mutated_proof_trace_at_oods": {
+        "accepted": false,
+        "rejecting_pieces": 16,
+        "output_label_is_reject_label": true
+      },
+      "seconds": [
+        340.8,
+        326.1
+      ],
+      "peak_rss_kib": [
+        11406580,
+        11533540
+      ],
+      "commitment_reproduced_by_second_run": true
+    },
+    "csv_below_delay": {
+      "statement_output_words": [
+        "7a2071d6",
+        "b54c4353",
+        "eb421b65",
+        "ae6367fb",
+        "b7a811ca",
+        "fa2c879d",
+        "476d0f3a",
+        "60c06532"
+      ],
+      "pieces": 1179,
+      "ciphertexts": 4893461084,
+      "ciphertext_bytes": 78295377344,
+      "gates_total": 14116702663,
+      "commitment_blake3": "9b3a114e87951fa68b3d6e483f77ca7377e371b5ac563671e5ad00f078df13cb",
+      "honest_witness": {
+        "accepted": true,
+        "rejecting_pieces": 0,
+        "output_label_is_accept_label": true
+      },
+      "mutated_proof_trace_at_oods": {
+        "accepted": false,
+        "rejecting_pieces": 16,
+        "output_label_is_reject_label": true
+      },
+      "seconds": [
+        325.8
+      ],
+      "peak_rss_kib": [
+        11521904
+      ]
+    }
+  },
+  "environment": "WSL Ubuntu-24.04 on the laptop, 16 worker threads, RUSTFLAGS -C target-cpu=native",
+  "per_piece_checks": [
+    "ciphertext count equals the non-free gate count of the engine and the direct AND count",
+    "the evaluator consumes exactly the ciphertexts of the piece",
+    "evaluated verdict equals the direct verdict",
+    "active output label equals the garbler label for the verdict and differs from the other label"
+  ],
+  "fanout": {
+    "counter_bits": 16,
+    "shard_2000": {
+      "pieces": 589,
+      "worst": 70002,
+      "pieces_over_limit": 20
+    },
+    "shard_1000": {
+      "pieces": 1178,
+      "worst": 35002,
+      "pieces_over_limit": 0
+    },
+    "shard_500": {
+      "pieces": 2356,
+      "worst": 17502,
+      "pieces_over_limit": 0
+    },
+    "first_attempt": "2000-constraint pieces failed inside the engine: created but not initialized"
+  },
+  "unit_tests": [
+    "garble::tests::pieces_form_one_garbled_circuit",
+    "garble::tests::input_labels_depend_only_on_global_position",
+    "shard::tests::sharding_never_changes_the_verdict"
+  ],
+  "ci": "pending",
+  "not_established": [
+    "Bitcoin script, transactions or a dispute game",
+    "oblivious transfer or on-chain commitments for input labels",
+    "correctness of the garbling toward a second party (no cut-and-choose, no verifiable garbling)",
+    "the statement as an input rather than a circuit constant",
+    "a reviewed parameter set (the statement is the laboratory profile L21 of S4e)"
+  ],
+  "authorization": {
+    "full_shinigami_stark": "laboratory profile L21 only",
+    "bitvm3_dispute_protocol": false,
+    "ark_utxoref_state": false
+  }
+}

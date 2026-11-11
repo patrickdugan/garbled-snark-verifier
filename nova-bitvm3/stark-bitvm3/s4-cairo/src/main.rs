@@ -3,6 +3,8 @@
 mod count;
 mod direct;
 mod evidence;
+#[cfg(feature = "garbled")]
+mod garble;
 mod lab_config;
 mod shard;
 use anyhow::{bail, Context as _, Result};
@@ -96,6 +98,40 @@ fn main() -> Result<()> {
             );
             check(fixture, light)
         }
+        #[cfg(feature = "garbled")]
+        Some("fanout") => {
+            // Diagnostic: the largest wire fan-out of each piece of the production final verifier.
+            let template = final_verifier_template()?;
+            let pins: Vec<(usize, [u32; 4])> = template.circuit().output.iter().filter(|g| g.in0 > 2).map(|g| (g.in0, [0, 0, 0, 0])).collect();
+            let limits = Limits { max_vars: 64_000_000, max_constraints: 64_000_000, max_permutation: 1 << 22, max_permutation_work: usize::MAX / 4 };
+            let program = import_finalized(&template, &pins, limits).context("import")?;
+            let size: usize = args.get(2).and_then(|a| a.parse().ok()).unwrap_or(2000);
+            let plan = shard::Plan::new(&program, size);
+            let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16);
+            let rows = shard::for_each_piece(plan.len(), threads, |i| {
+                let piece = plan.piece(i)?;
+                let (max, over, widest, inputs) = garble::max_fanout(&piece.program)?;
+                let what = if widest >= 2 && widest < inputs + 2 { format!("input bit {} of global var {}", (widest - 2) % 128, piece.globals[(widest - 2) / 128]) } else { "internal wire".to_string() };
+                Ok((max, over, what, piece.program.n_vars(), piece.program.constraints().len()))
+            })?;
+            let worst = rows.iter().map(|r| r.0).max().unwrap_or(0);
+            let bad = rows.iter().filter(|r| r.1 > 0).count();
+            println!("fanout: shard size {size}: {} pieces, worst fan-out {worst}, pieces with a wire above 65535: {bad}", rows.len());
+            for (i, r) in rows.iter().enumerate().filter(|(i, r)| r.1 > 0 || *i < 3).take(12) {
+                println!("fanout: piece {i}: max {} over-limit wires {} widest {} vars {} constraints {}", r.0, r.1, r.2, r.3, r.4);
+            }
+            Ok(())
+        }
+        #[cfg(feature = "garbled")]
+        Some("garble") => garble_check(evidence::load_fixture(std::path::Path::new(args.get(2).context("fixture directory")?))?),
+        #[cfg(feature = "garbled")]
+        Some("garble-lab") => {
+            let (fixture, _receipt) = evidence::load_lab(
+                std::path::Path::new(args.get(2).context("recursion_raw.bin")?),
+                &std::fs::read_to_string(args.get(3).context("output_preimage.json")?)?,
+            )?;
+            garble_check(fixture)
+        }
         Some("lab-root") => {
             // Recompute the L21 Cairo-verifier circuit's preprocessed root from the pinned profile alone.
             let preprocessed = evidence::lab_preprocessed()?;
@@ -105,7 +141,7 @@ fn main() -> Result<()> {
             anyhow::ensure!(root == lab_config::CIRCUIT_PREPROCESSED_ROOT, "pinned circuit root differs from the recomputed one");
             Ok(())
         }
-        _ => bail!("usage: s4 final|final-fixture|final-lab|cairo [--boolean] [--analytic] | check FIXTURE_DIR | check-prod RAW DIGEST_FILE | check-lab RAW PREIMAGE_JSON [--light] | lab-root"),
+        _ => bail!("usage: s4 final|final-fixture|final-lab|cairo [--boolean] [--analytic] | check FIXTURE_DIR | check-prod RAW DIGEST_FILE | check-lab RAW PREIMAGE_JSON [--light] | lab-root | (feature garbled) garble FIXTURE_DIR | garble-lab RAW PREIMAGE_JSON"),
     }
 }
 
@@ -207,5 +243,59 @@ fn check(fixture: evidence::Fixture, light: bool) -> Result<()> {
     let (alias_ok, _, _) = shard::run(&program, &alias, shard_size, threads)?;
     anyhow::ensure!(!alias_ok, "noncanonical zero alias accepted");
     println!("check: noncanonical zero alias rejected; all checks passed in {:.1}s", start.elapsed().as_secs_f64());
+    Ok(())
+}
+
+/// S5: garbles the whole final verifier for the fixture's statement, piece by piece under one delta, and
+/// evaluates it with the honest witness and with the witness of a mutated proof.
+#[cfg(feature = "garbled")]
+fn garble_check(fixture: evidence::Fixture) -> Result<()> {
+    use stwo::core::fields::qm31::QM31;
+    let start = Instant::now();
+    println!("garble: proof under test: {}", fixture.label);
+    let valid = evidence::context(&fixture, &fixture.proof);
+    anyhow::ensure!(valid.is_circuit_valid(), "the native relation rejected the proof");
+    let template = evidence::template(&fixture.shared);
+    anyhow::ensure!(valid.circuit() == template.circuit(), "the proof-bearing circuit differs from the template");
+    let good = evidence::values(&valid);
+    let mut mutated = fixture.proof.clone();
+    mutated.trace_at_oods[0] += QM31::from_u32_unchecked(1, 0, 0, 0);
+    let bad_context = evidence::context(&fixture, &mutated);
+    anyhow::ensure!(bad_context.circuit() == template.circuit(), "the mutation changed the graph");
+    anyhow::ensure!(!bad_context.is_circuit_valid(), "the native relation accepted the mutated proof");
+    let bad = evidence::values(&bad_context);
+
+    let outputs = evidence::statement_outputs(&fixture.shared, fixture.root, fixture.digest);
+    let first = circuits::context::OUTPUT_START;
+    let pins: Vec<(usize, [u32; 4])> = (first..first + outputs.len()).zip(outputs).collect();
+    let limits = Limits {
+        max_vars: 64_000_000, max_constraints: 64_000_000,
+        max_permutation: 1 << 22, max_permutation_work: usize::MAX / 4,
+    };
+    let program = import_finalized(&template, &pins, limits).context("import")?;
+    let threads = std::env::var("S5_THREADS").ok().and_then(|t| t.parse().ok())
+        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16));
+    println!(
+        "garble: program n_vars={} constraints={} input_bits={}, statement words {:08x?}, {threads} threads ({:.1}s)",
+        program.n_vars(), program.constraints().len(), program.input_bits(),
+        evidence::statement_words(&fixture.shared, fixture.root, fixture.digest), start.elapsed().as_secs_f64()
+    );
+    // Pieces of 1,000 constraints keep every wire's fan-out (35,001 at most here) inside the engine's
+    // 16-bit read counter; 2,000 would not (70,002).
+    let out = garble::run(&program, &[&good, &bad], 1000, threads, 117)?;
+    println!(
+        "garble: {} pieces under one delta, {} ciphertexts ({} bytes at 16 bytes each), {} gates in all, commitment blake3 {}",
+        out.pieces, out.ciphertexts, out.ciphertexts * 16, out.gates, hex::encode(out.commitment)
+    );
+    let (accept, rejecting, label_ok) = out.verdicts[0];
+    println!("garble: honest witness: accepted={accept} rejecting_pieces={rejecting} output_label_is_the_accept_label={label_ok}");
+    anyhow::ensure!(accept && rejecting == 0 && label_ok, "the garbled circuit did not accept the honest witness");
+    let (accept, rejecting, label_ok) = out.verdicts[1];
+    println!("garble: mutated proof (trace_at_oods[0]+1): accepted={accept} rejecting_pieces={rejecting} output_label_is_the_reject_label={label_ok}");
+    anyhow::ensure!(!accept && rejecting > 0 && label_ok, "the garbled circuit did not reject the mutated proof");
+    println!(
+        "garble: garbling and both evaluations took {:.1}s on {threads} threads; all checks passed in {:.1}s",
+        out.seconds, start.elapsed().as_secs_f64()
+    );
     Ok(())
 }

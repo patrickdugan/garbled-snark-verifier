@@ -78,6 +78,17 @@ impl<H: GateHasher, SRC: CiphertextSource> EvaluateMode<H, SRC> {
         }
     }
 
+    /// Number gates from `index` instead of zero, matching a piece garbled with
+    /// [`GarbleMode::with_first_gate_index`](super::garble_mode::GarbleMode::with_first_gate_index).
+    pub fn with_first_gate_index(mut self, index: usize) -> Self {
+        assert_eq!(
+            self.gate_index, 0,
+            "set the first gate index before any gate is evaluated"
+        );
+        self.gate_index = index;
+        self
+    }
+
     fn next_gate_index(&mut self) -> usize {
         let index = self.gate_index;
         self.gate_index += 1;

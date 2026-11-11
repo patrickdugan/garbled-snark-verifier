@@ -1,18 +1,25 @@
 # Continuation after S2 and S3a
 
+## S5: the whole final verifier garbled and evaluated on a Shinigami proof
+
+[S5.md](S5.md) and [S5_RESULTS.json](S5_RESULTS.json). The 4.78-billion-AND final verifier is garbled with the repository's half-gates engine as one circuit in 1,178 pieces plus a combining piece: one delta, one label pair per input bit across pieces, disjoint gate numbers per piece. For the `csv_valid` Shinigami statement that is 4,893,461,084 ciphertexts (78.3 GB as a stream, hashed and not stored), commitment `517d4e1a...8621`, 5.5 minutes and 11.5 GB on this laptop. Evaluating it gives the garbler's accept label for the honest witness and the reject label for a mutated proof. The engine's 16-bit read counter wrapped silently in release builds; that is now a hard error and pieces are cut at 1,000 constraints.
+
+Next, in order:
+
+1. **Input labels and statement as protocol objects.** Replace direct label selection by the mechanism BitVM3 will use to bind the evaluator to one witness (label commitments opened on chain or oblivious transfer), and turn the eight public output words from circuit constants into opened inputs so one garbling serves every statement.
+2. **Garbling correctness toward the counterparty** (cut-and-choose over pieces or another verifiable-garbling approach), using the per-piece commitments that already exist.
+3. **Bitcoin script and the dispute game** over the output label and the ciphertext commitment.
+4. **Review L21 as a parameter set**, or shrink the executable so the production profile carries it (the bootloader run costs 2.61 million steps more than the standalone execution, following the 169,856-word program).
+5. **Receipt scope**: the receipt is the S3 pilot (regtest, CSV and SHA256 hashlock, no signatures).
+6. Keep Nova, SP1 and CUDA proving outside this workstream.
+
 ## S4: a Shinigami statement reaches the Boolean relation
 
 [S4.md](S4.md) and [S4_RESULTS.json](S4_RESULTS.json). The pinned `starkware-libs/proving` circuit verifiers, imported through the S1 lowering, have these exact Boolean sizes: the **production final 1-to-1 verifier is 4,783,261,848 non-free ANDs** (379 million raw input bits, 2.96 million variables, about 76.5 GB of ciphertext at the S2 rate), the fixture-config one 3,338,462,413, and the Cairo verifier circuit 14,693,909,921. A Cairo program is therefore never verified at the Boolean level: it runs as a task of the 2,584-word privacy bootloader and reaches the Boolean relation through the recursion into the final verifier, whose circuit is the same for every program and receipt.
 
 **Shinigami (S4e).** The unmodified 169,856-word Shinigami executable of S3 is proved under the privacy bootloader with laboratory profile L21 (`s4-cairo/src/lab_config.rs`: Cairo trace up to 2^21, blowup 2 with 35 queries, 46 components; everything else is the production privacy profile), recursed, and the final verifier, which is gate for gate the production one, accepts. Four receipts are committed as fixtures (CSV accepted and rejected, SHA256 hashlock accepted and rejected). For each, the native verifiers and the Boolean relation accept, and proof mutations, statement mutations and a non-canonical alias are rejected. The statement is derived by the checker: pinned root (recomputed from the profile), digest recomputed from the bootloader output, pinned Shinigami program hash (recomputed from the executable), and the final verifier's output words computed from the statement, never read from the witness. Proving takes about 40 s and 15.4 GB on this laptop and is deterministic. CI job `s4-verifier-circuit` (`[s4-check]`) checks the committed proofs.
 
-Next, in order:
-
-1. **Garble the final verifier.** 4.78 billion non-free ANDs, about 76.5 GB of ciphertext at 16 bytes per gate, with a streaming garbler and a streaming evaluator over the sharded program (the shards already bound memory at 1.6 GB for direct evaluation). Measure time and disk before choosing where to run it; a rented disk needs a per-session yes.
-2. **BitVM3 dispute protocol and Bitcoin script** for the two public values (circuit root, output digest) and the eight output words that follow from them.
-3. **Review L21 as a parameter set.** Each constant is upstream's, the combination is not; either get it reviewed or move to an upstream profile that admits a 2^21 Cairo trace. Shrinking the executable would let the production profile itself carry it: the bootloader run costs 2.61 million steps more than the standalone execution, and that overhead follows the 169,856-word program, not the script being checked.
-4. **Receipt scope.** The receipt is the S3 pilot (regtest, CSV and SHA256 hashlock, no signatures). Widen it only with the corresponding Core-vector evidence.
-5. Keep Nova, SP1 and CUDA proving outside this workstream.
+The follow-up list is under S5 above.
 
 ## S3q: the native Shinigami proof blocker is cleared (laboratory profile)
 

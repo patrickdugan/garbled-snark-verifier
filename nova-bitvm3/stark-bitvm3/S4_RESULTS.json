@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "stage": "S4 Stwo circuit verifier through the Boolean lowering; Shinigami receipts accepted (laboratory profile L21)",
-  "code_commit": "2f67df3",
+  "code_commit": "64bdaf4",
   "base_head": "67801a9",
   "source_pins": {
     "proving": "e9a38e12d09979f7a8625e233a80fecac6c38f02",
@@ -460,7 +460,44 @@
     },
     "determinism": "a second full run reproduced all four recursion proofs byte for byte",
     "fixtures": "s4-cairo/fixtures/shinigami (SHA256SUMS)",
-    "ci": "pending"
+    "ci": {
+      "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42957651998",
+      "commit": "64bdaf4",
+      "job": "s4-verifier-circuit",
+      "result": "success",
+      "job_minutes": 7.4,
+      "lab_root_recomputed_matches_pin": true,
+      "final_lab_non_free_and": 4783261848,
+      "cases": {
+        "csv_valid": {
+          "mode": "full",
+          "boolean_accepted": true,
+          "threads": 4,
+          "boolean_seconds": 11.3,
+          "check_seconds": 126.7,
+          "peak_rss_kib": 814140
+        },
+        "csv_below_delay": {
+          "mode": "light",
+          "boolean_accepted": true,
+          "check_seconds": 59.1,
+          "peak_rss_kib": 789692
+        },
+        "hashlock_valid": {
+          "mode": "light",
+          "boolean_accepted": true,
+          "check_seconds": 58.9,
+          "peak_rss_kib": 791200
+        },
+        "hashlock_wrong_preimage": {
+          "mode": "light",
+          "boolean_accepted": true,
+          "check_seconds": 58.7,
+          "peak_rss_kib": 789796
+        }
+      },
+      "all_mutations_rejected": true
+    }
   },
   "shinigami_production_profile_fit": {
     "blake": {

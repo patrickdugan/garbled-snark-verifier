@@ -103,6 +103,21 @@ impl<H: hashers::GateHasher, CTH: CiphertextHandler> GarbleMode<H, CTH> {
         self.gate_hasher.seed()
     }
 
+    /// Number gates from `index` instead of zero.
+    ///
+    /// A circuit garbled in pieces under one seed shares Δ and the hasher key across the pieces. Giving
+    /// each piece its own index range keeps every gate tweak unique, which matters as soon as two pieces
+    /// read the same wire label. The evaluator must use the same range
+    /// ([`EvaluateMode::with_first_gate_index`](super::evaluate_mode::EvaluateMode::with_first_gate_index)).
+    pub fn with_first_gate_index(mut self, index: usize) -> Self {
+        assert_eq!(
+            self.gate_index, 0,
+            "set the first gate index before any gate is garbled"
+        );
+        self.gate_index = index;
+        self
+    }
+
     pub fn preallocate_input<I: EncodeInput<GarbleMode<H, ()>>>(
         seed: u64,
         i: &I,
