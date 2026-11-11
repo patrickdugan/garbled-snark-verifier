@@ -1,0 +1,14 @@
+task loaded: /root/build/s3o/s3-shinigami/target/dev/shinigami_bitvm3_receipt.executable.json (2.1s)
+program hash function: blake
+bootloader executed, output preimage 24 felts (0.9s)
+prover input adapted (1.8s)
+dims: steps by opcode: generic 0 add_ap 171012 add 346872 add_small 678455 assert_eq 13723 assert_eq_dd 753891 assert_eq_imm 176228 call_abs 1 call_rel_imm 2298 jnz_nt 7282 jnz_t 208013 jump_rel_imm 176020 jump_rel 440 jump_dd 1 jump_abs 1 mul_small 188695 mul 19865 ret 2299 blake 23017 qm31 0
+dims: memory address_to_id 3005697 f252_values 36955 small_values 790469 pc_count 7306 public_memory_addresses 2610 builtin_segments BuiltinSegments { add_mod_builtin: None, bitwise_builtin: Some(MemorySegmentAddresses { begin_addr: 2262546, stop_ptr: 2283026 }), output: Some(MemorySegmentAddresses { begin_addr: 2000400, stop_ptr: 2000402 }), mul_mod_builtin: None, pedersen_builtin: None, poseidon_builtin: None, range_check96_builtin: None, range_check_builtin: Some(MemorySegmentAddresses { begin_addr: 2000402, stop_ptr: 2262546 }), ec_op_builtin: None }
+cairo proof produced (22.5s)
+enabled components (46): add_opcode,add_opcode_small,add_ap_opcode,assert_eq_opcode,assert_eq_opcode_imm,assert_eq_opcode_double_deref,blake_compress_opcode,call_opcode_abs,call_opcode_rel_imm,jnz_opcode_non_taken,jnz_opcode_taken,jump_opcode_abs,jump_opcode_double_deref,jump_opcode_rel,jump_opcode_rel_imm,mul_opcode,mul_opcode_small,ret_opcode,verify_instruction,blake_round,blake_g,blake_round_sigma,triple_xor_32,verify_bitwise_xor_12,bitwise_builtin,range_check_builtin,memory_address_to_id,memory_id_to_big,memory_id_to_small,range_check_6,range_check_8,range_check_11,range_check_12,range_check_18,range_check_20,range_check_4_3,range_check_4_4,range_check_9_9,range_check_7_2_5,range_check_3_6_6_3,range_check_4_4_4_4,range_check_3_3_3_3_3,verify_bitwise_xor_4,verify_bitwise_xor_7,verify_bitwise_xor_8,verify_bitwise_xor_9
+component log sizes: [19, 20, 18, 14, 18, 20, 15, 4, 12, 13, 18, 4, 4, 9, 18, 15, 18, 12, 13, 18, 21, 4, 18, 20, 12, 18, 18, 16, 20, 6, 8, 11, 12, 18, 20, 7, 8, 18, 14, 18, 16, 15, 8, 14, 16, 18]
+pcs config: PcsConfig { fri_params: FriParams { pow_bits: 26, log_blowup_factor: 2, log_last_layer_degree_bound: 0, n_queries: 35, fold_step: 4 }, trace_lifting_log_size: 23, preprocessed_lifting_log_size: 23 }
+cairo preprocessed root words: [3179307202, 1157159835, 453510509, 2593092033, 3795335427, 2895299845, 1780569295, 460461011]
+matches pinned component set: true
+cairo proof stored: 775534 bytes compressed (22.7s)
+native Cairo verifier accepted (22.7s)

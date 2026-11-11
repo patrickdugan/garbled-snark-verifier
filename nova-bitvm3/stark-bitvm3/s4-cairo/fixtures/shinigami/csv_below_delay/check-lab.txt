@@ -1,0 +1,17 @@
+check: statement: Shinigami program hash 0x35d865e3a2c16e04032630546acb93f8d1b883cbb6fb688eb4e1afd1dc42f8 (pinned), receipt of 21 words
+check: statement: domain 0x5348494e4947414d495f424954564d335f5631 schema 0x1 scope 0x1 flags 0x518 accepted 0x0 error 0x556e736174697366696564206c6f636b74696d65 txid 0xc1ee8b1c3d287a5fbcdefba3986205999d59073897c7fc67cc05a1865c16c9c7
+check: proof under test: Shinigami under the privacy bootloader, laboratory profile L21
+check: native relation accepted the proof (0.2s)
+check: statement: root [0fff68af, 9af75f7f, 6f5fa0a2, 622cf3d2, 0e9c2c7c, b6e7c3f8, 77bd79fb, 99a12235] digest [644a7d93, 3653b027, c9d5a48f, a1c73aa6, 7ecd28bf, 0b6fe73d, 9b36945d, eed28ebb] gives public output words [7a2071d6, b54c4353, eb421b65, ae6367fb, b7a811ca, fa2c879d, 476d0f3a, 60c06532]
+check: program n_vars=2961135 constraints=1177730 public output pins=8 (derived from the statement)
+check: Boolean relation accepted=true over 589 shards on 16 threads, summed non-free ANDs 4889964208 (9.2s)
+check: mutation trace_at_oods[0]+1: native_accepts=false boolean_accepts=false
+check: mutation claimed_sums[0]+1: native_accepts=false boolean_accepts=false
+check: mutation fri_last_layer_coef+1: native_accepts=false boolean_accepts=false
+check: mutation oods_pow_nonce+1: native_accepts=false boolean_accepts=false
+check: mutation fri_witness_first+1: native_accepts=false boolean_accepts=false
+check: mutation channel_salt+1: native_accepts=false boolean_accepts=false
+check: statement digest bit flipped in the pinned statement, honest witness: boolean_accepts=false
+check: statement root bit flipped in the pinned statement, honest witness: boolean_accepts=false
+check: witness synthesized for another digest: native_accepts=false boolean_accepts=false
+check: noncanonical zero alias rejected; all checks passed in 88.2s

@@ -3,6 +3,7 @@
 mod count;
 mod direct;
 mod evidence;
+mod lab_config;
 mod shard;
 use anyhow::{bail, Context as _, Result};
 use circuit_cairo_verifier::verify::build_cairo_verifier_circuit;
@@ -53,6 +54,8 @@ fn final_verifier_template() -> Result<FinalizedContext<NoValue>> {
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let boolean = args.iter().any(|a| a == "--boolean");
+    // `--light` keeps acceptance and the statement mutations and skips the six proof mutations.
+    let light = args.iter().any(|a| a == "--light");
     let analytic = args.iter().any(|a| a == "--analytic");
     match args.get(1).map(String::as_str) {
         Some("final") => report("final-1to1", &final_verifier_template()?, boolean, analytic),
@@ -72,17 +75,42 @@ fn main() -> Result<()> {
             report("cairo", &build_cairo_verifier_circuit(&config), boolean, analytic)
         }
         Some("final-fixture") => report("final-1to1-fixture-config", &evidence::fixture_template(), boolean, analytic),
-        Some("check") => check(evidence::load_fixture(std::path::Path::new(args.get(2).context("fixture directory")?))?),
+        Some("check") => check(evidence::load_fixture(std::path::Path::new(args.get(2).context("fixture directory")?))?, light),
         Some("check-prod") => check(evidence::load_production(
             std::path::Path::new(args.get(2).context("recursion_raw.bin")?),
             &std::fs::read_to_string(args.get(3).context("output_digest.hex")?)?,
-        )?),
-        _ => bail!("usage: s4 final|cairo [--boolean] [--analytic] | final-fixture | check FIXTURE_DIR | check-prod RAW DIGEST_FILE"),
+        )?, light),
+        Some("final-lab") => report("final-1to1-lab-L21", &evidence::template(&evidence::lab_shared()?), boolean, analytic),
+        Some("check-lab") => {
+            let (fixture, receipt) = evidence::load_lab(
+                std::path::Path::new(args.get(2).context("recursion_raw.bin")?),
+                &std::fs::read_to_string(args.get(3).context("output_preimage.json")?)?,
+            )?;
+            let n = receipt.words.len();
+            anyhow::ensure!(n >= 8, "receipt too short");
+            println!("check: statement: Shinigami program hash {:#x} (pinned), receipt of {n} words", receipt.program_hash);
+            println!(
+                "check: statement: domain {:#x} schema {:#x} scope {:#x} flags {:#x} accepted {:#x} error {:#x} txid {:#x}{:032x}",
+                receipt.words[0], receipt.words[1], receipt.words[2], receipt.words[3],
+                receipt.words[n - 4], receipt.words[n - 3], receipt.words[n - 1], receipt.words[n - 2]
+            );
+            check(fixture, light)
+        }
+        Some("lab-root") => {
+            // Recompute the L21 Cairo-verifier circuit's preprocessed root from the pinned profile alone.
+            let preprocessed = evidence::lab_preprocessed()?;
+            let root = circuits::utils::le_u32s_from_bytes(preprocessed.preprocessed_root(lab_config::CIRCUIT_FRI.log_blowup_factor).0);
+            println!("lab-root: circuit trace log size {} recomputed root {:?}", preprocessed.trace_log_size(), root);
+            println!("lab-root: matches pinned CIRCUIT_PREPROCESSED_ROOT: {}", root == lab_config::CIRCUIT_PREPROCESSED_ROOT);
+            anyhow::ensure!(root == lab_config::CIRCUIT_PREPROCESSED_ROOT, "pinned circuit root differs from the recomputed one");
+            Ok(())
+        }
+        _ => bail!("usage: s4 final|final-fixture|final-lab|cairo [--boolean] [--analytic] | check FIXTURE_DIR | check-prod RAW DIGEST_FILE | check-lab RAW PREIMAGE_JSON [--light] | lab-root"),
     }
 }
 
 /// Native acceptance, Boolean acceptance and mutation rejection for a proof of the privacy Cairo-verifier circuit.
-fn check(fixture: evidence::Fixture) -> Result<()> {
+fn check(fixture: evidence::Fixture, light: bool) -> Result<()> {
     use circuits_stark_verifier::proof::Proof;
     use stwo::core::fields::qm31::QM31;
     let start = Instant::now();
@@ -95,15 +123,27 @@ fn check(fixture: evidence::Fixture) -> Result<()> {
     let template = evidence::template(&fixture.shared);
     anyhow::ensure!(valid.circuit() == template.circuit(), "the proof-bearing circuit differs from the template");
     let good = evidence::values(&valid);
-    let pins: Vec<(usize, [u32; 4])> =
-        template.circuit().output.iter().filter(|g| g.in0 > 2).map(|g| (g.in0, good[g.in0])).collect();
+    // Public values are never read from the witness: the eight output words follow from the statement
+    // (pinned configuration, preprocessed root, output digest) alone.
     let limits = Limits {
         max_vars: 64_000_000, max_constraints: 64_000_000,
         max_permutation: 1 << 22, max_permutation_work: usize::MAX / 4,
     };
+    let pins_for = |root: [u32; 8], digest: [u32; 8]| -> Result<Vec<(usize, [u32; 4])>> {
+        let outputs = evidence::statement_outputs(&fixture.shared, root, digest);
+        let gates: Vec<usize> = template.circuit().output.iter().map(|g| g.in0).filter(|v| *v > 2).collect();
+        let start = circuits::context::OUTPUT_START;
+        anyhow::ensure!(gates == (start..start + outputs.len()).collect::<Vec<_>>(), "unexpected output gate layout");
+        Ok(gates.into_iter().zip(outputs).collect())
+    };
+    let pins = pins_for(fixture.root, fixture.digest)?;
+    println!(
+        "check: statement: root {:08x?} digest {:08x?} gives public output words {:08x?}",
+        fixture.root, fixture.digest, evidence::statement_words(&fixture.shared, fixture.root, fixture.digest)
+    );
     let program = import_finalized(&template, &pins, limits).context("import")?;
     println!(
-        "check: program n_vars={} constraints={} public output pins={}",
+        "check: program n_vars={} constraints={} public output pins={} (derived from the statement)",
         program.n_vars(), program.constraints().len(), pins.len()
     );
     let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16);
@@ -126,6 +166,10 @@ fn check(fixture: evidence::Fixture) -> Result<()> {
     if let Some(x) = m.fri.witness.0.iter_mut().flatten().flatten().next() { *x += one; }
     cases.push(("fri_witness_first+1", m));
     let mut m = p.clone(); m.channel_salt += one; cases.push(("channel_salt+1", m));
+    if light {
+        cases.clear();
+        println!("check: proof mutations skipped (--light)");
+    }
     for (name, bad) in cases {
         let built = std::panic::catch_unwind(|| evidence::context(&fixture, &bad));
         let Ok(ctx) = built else {
@@ -139,6 +183,24 @@ fn check(fixture: evidence::Fixture) -> Result<()> {
         println!("check: mutation {name}: native_accepts={native_ok} boolean_accepts={boolean_ok}");
         anyhow::ensure!(!native_ok && !boolean_ok, "mutation accepted: {name}");
     }
+    // Statement mutations: the honest witness must not satisfy the relation pinned to another statement,
+    // and a witness synthesized for another digest must not satisfy the relation pinned to this one.
+    let mut other_digest = fixture.digest;
+    other_digest[0] ^= 1;
+    let mut other_root = fixture.root;
+    other_root[0] ^= 1;
+    for (name, root, digest) in [("statement digest bit", fixture.root, other_digest), ("statement root bit", other_root, fixture.digest)] {
+        let wrong = import_finalized(&template, &pins_for(root, digest)?, limits).context("import")?;
+        let (accepted, _, _) = shard::run(&wrong, &good, shard_size, threads)?;
+        println!("check: {name} flipped in the pinned statement, honest witness: boolean_accepts={accepted}");
+        anyhow::ensure!(!accepted, "a wrong statement was accepted: {name}");
+    }
+    let ctx = evidence::context_for(&fixture, &fixture.proof, other_digest);
+    let native_ok = ctx.is_circuit_valid();
+    let (boolean_ok, _, _) = shard::run(&program, &evidence::values(&ctx), shard_size, threads)?;
+    println!("check: witness synthesized for another digest: native_accepts={native_ok} boolean_accepts={boolean_ok}");
+    anyhow::ensure!(!native_ok && !boolean_ok, "a witness for another digest was accepted");
+
     // Non-canonical alias: a variable holding p instead of 0 must be rejected by the Boolean relation.
     let mut alias = good.clone();
     alias[0][0] = stwo_bitvm3_core::P;

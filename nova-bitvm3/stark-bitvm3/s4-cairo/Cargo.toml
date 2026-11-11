@@ -26,6 +26,10 @@ circuit-serialize = { git = "https://github.com/starkware-libs/proving", rev = "
 circuit-prover = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02", features = ["test-utils"] }
 serde_json = "1"
 privacy_common = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+cairo-air = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+circuit-common = { git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+stwo_cairo_common = { package = "stwo-cairo-common", git = "https://github.com/starkware-libs/proving", rev = "e9a38e12d09979f7a8625e233a80fecac6c38f02" }
+starknet-types-core = { version = "=0.2.4", features = ["hash", "prime-bigint", "serde", "curve", "num-traits"] }
 
 [dev-dependencies]
 stwo-bitvm3-lowering = { path = "../lowering", features = ["test-utils"] }

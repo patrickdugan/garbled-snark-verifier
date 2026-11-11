@@ -1,0 +1,5 @@
+Cairo-verifier circuit template: stats Stats { equals: 131072, add: 1162211, sub: 284091, mul: 288202, inv: 5271, div: 1680, pointwise_mul: 208220, guess: 192167, blake_updates: 12668, permutation_inputs: 77210, outputs: 9, triple_xor: 131072, m31_to_u32: 262144 }, trace log size 21 (0.7s)
+Cairo-verifier circuit accepted the Shinigami Cairo proof (1.0s)
+recursion proof produced (8.3s)
+native 1-to-1 circuit verifier accepted (8.4s)
+sizes: raw recursion proof 263812 bytes, circuit root words [268396719, 2599903103, 1868538018, 1647113170, 245116028, 3068642296, 2008906235, 2577474101], pinned root match true, digest 4c233dbc3acc18726a68cfe3dea89a6fc1d1370a11ceb99bdc501c16b8180c80

@@ -1,0 +1,5 @@
+lab-cairo peak_rss_kib 15207604
+lab-recurse peak_rss_kib 9029396
+check-lab Elapsed (wall clock) time (h:mm:ss or m:ss): 1:22.84
+check-lab Maximum resident set size (kbytes): 1576684
+b967d030b1727e416a1216a7e61aa015b618fd309324d5e280cb761b9ab1b653  cairo_proof.bin (not committed, 773363 bytes)

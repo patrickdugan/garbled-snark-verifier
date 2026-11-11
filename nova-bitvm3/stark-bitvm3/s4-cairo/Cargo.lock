@@ -2797,7 +2797,9 @@ name = "stwo-bitvm3-s4-cairo"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cairo-air",
  "circuit-cairo-verifier",
+ "circuit-common",
  "circuit-prover",
  "circuit-serialize",
  "circuit-verifier",
@@ -2809,10 +2811,12 @@ dependencies = [
  "privacy_common",
  "serde_json",
  "sha2",
+ "starknet-types-core",
  "stwo",
  "stwo-bitvm3-core",
  "stwo-bitvm3-lowering",
  "stwo-bitvm3-upstream",
+ "stwo-cairo-common",
 ]
 
 [[package]]

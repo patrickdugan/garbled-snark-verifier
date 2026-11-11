@@ -1,5 +1,13 @@
 # Direct Stwo-to-Boolean prototype
 
+## S4: Shinigami receipts accepted by the Boolean relation of the Stwo final verifier
+
+The unmodified 169,856-word Shinigami executable is proved as a task of upstream's privacy bootloader (laboratory profile L21), recursed into a 1-to-1 circuit proof, and accepted by the Boolean lowering of the final verifier: 4,783,261,848 non-free ANDs, gate for gate the production verifier of `starkware-libs/proving` at `e9a38e12`. Four receipts are committed (CSV and SHA256 hashlock, accepted and rejected); proof mutations, statement mutations and a non-canonical alias are rejected. The statement (circuit root, output digest, program hash, receipt) is derived by the checker, never read from the witness. Proving takes about 40 s and 15.4 GB on a laptop; the checker needs 1.6 GB. Nothing is garbled at this size yet and no Bitcoin script exists. See [S4.md](S4.md), [S4_RESULTS.json](S4_RESULTS.json) and [NEXT.md](NEXT.md).
+
+## S3q: native Shinigami proof
+
+The lookup residual of S3f to S3o was an input mismatch (the public segment context). With that one field corrected, the unmodified pinned prover and verifier accept a proof of the standalone Shinigami trace. See [S3Q.md](S3Q.md) and [S3P.md](S3P.md).
+
 ## S3n producer attribution: 4,096 XOR8 zero inputs from bitwise_builtin
 
 The bounded native [S3n diagnostic](https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42772759725) attributed every zero-input request for XOR8 tag 112558620 to `bitwise_builtin`, accounting for its local `−4096` table multiplicity. Source-pinned AIR declares one positive XOR8 lookup per 4,096-row builtin instance. The original global Cairo LogUp assertion still rejects the Shinigami proof. All four CI jobs passed, with 1.61 GB peak RSS and 19.227 seconds of native diagnostic execution. See [S3N.md](S3N.md) and [S3N_RESULTS.json](S3N_RESULTS.json).

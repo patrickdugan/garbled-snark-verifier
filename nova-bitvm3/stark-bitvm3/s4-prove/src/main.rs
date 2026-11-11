@@ -1,14 +1,21 @@
-//! Runs the production privacy pipeline (privacy bootloader, Cairo proof, Cairo-verifier circuit, recursion
-//! proof under the production circuit configuration) on one bootloader task, verifies the result with
-//! upstream's own verifier, and stores what the S4 Boolean check needs:
-//!   recursion_raw.bin   the decompressed recursion proof (CircuitSerialize bytes)
-//!   output_digest.hex   the 32-byte Blake2s digest of the bootloader output preimage
-//!   output_preimage.json the bootloader output preimage (felts)
-//!   proof_full.bin      the proof exactly as upstream emits it (35-byte header plus zstd body)
-//!   run.txt             timings and sizes
-//! Usage: s4-prove TASK OUT_DIR [ARGS_FILE]
-//!   TASK ending in .zip is a Cairo PIE; otherwise a Scarb `.executable.json` (its Bootloader entrypoint)
-//!   with ARGS_FILE a JSON array of hex felts.
+//! Provers for the S4 Boolean check.
+//!
+//! Production profile (upstream's privacy pipeline, unchanged parameters):
+//!   s4-prove TASK OUT_DIR [ARGS_FILE]
+//!     privacy bootloader, Cairo proof, Cairo-verifier circuit, recursion proof, upstream verification.
+//!     Writes recursion_raw.bin, output_digest.hex, output_preimage.json, proof_full.bin, run.txt.
+//!
+//! Laboratory profile L21 (`../s4-cairo/src/lab_config.rs`), one stage per process:
+//!   s4-prove lab-cairo TASK OUT_DIR [ARGS_FILE]
+//!   s4-prove lab-recurse OUT_DIR
+//!   s4-prove lab-bind TASK OUT_DIR [ARGS_FILE]
+//!   s4-prove lab-roots OUT_DIR
+//!
+//! TASK ending in .zip is a Cairo PIE; otherwise a Scarb `.executable.json` (its Bootloader entrypoint)
+//! with ARGS_FILE a JSON array of hex felts.
+mod lab;
+#[path = "../../s4-cairo/src/lab_config.rs"]
+mod lab_config;
 mod pipeline;
 use anyhow::{Context as _, Result, ensure};
 use cairo_program_runner_lib::Task;
@@ -21,28 +28,60 @@ use privacy_common::{PrivacyProofOutput, compute_privacy_bootloader_output_hash}
 use privacy_prove::prepare_recursive_prover_precomputes;
 use std::{fmt::Write as _, path::PathBuf, time::Instant};
 
+fn load_task(task_path: &PathBuf, args_file: Option<PathBuf>) -> Result<Task> {
+    if task_path.extension().is_some_and(|e| e == "zip") {
+        create_pie_task(task_path).map_err(|e| anyhow::anyhow!("pie: {e}"))
+    } else {
+        create_cairo1_program_task(task_path, None, args_file).map_err(|e| anyhow::anyhow!("cairo1 task: {e}"))
+    }
+}
+
 fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    ensure!(args.len() == 3 || args.len() == 4, "usage: s4-prove TASK OUT_DIR [ARGS_FILE]");
-    let (task_path, out) = (PathBuf::from(&args[1]), PathBuf::from(&args[2]));
-    std::fs::create_dir_all(&out)?;
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let mode = match args.first().map(String::as_str) {
+        Some("lab-cairo" | "lab-recurse" | "lab-bind" | "lab-roots") => args.remove(0),
+        _ => "prod".to_string(),
+    };
     let start = Instant::now();
-    let mut log = String::new();
+    let mut text = String::new();
     let mut note = |line: String| {
         println!("{line}");
-        writeln!(log, "{line}").ok();
+        writeln!(text, "{line}").ok();
     };
+    let out = match mode.as_str() {
+        "lab-recurse" | "lab-roots" => {
+            ensure!(args.len() == 1, "usage: s4-prove lab-recurse|lab-roots OUT_DIR");
+            let out = PathBuf::from(&args[0]);
+            std::fs::create_dir_all(&out)?;
+            if mode == "lab-roots" { lab::roots(&mut note)? } else { lab::recurse(&out, &mut note)? }
+            out
+        }
+        _ => {
+            ensure!(args.len() == 2 || args.len() == 3, "usage: s4-prove [lab-cairo|lab-bind] TASK OUT_DIR [ARGS_FILE]");
+            let (task_path, out) = (PathBuf::from(&args[0]), PathBuf::from(&args[1]));
+            std::fs::create_dir_all(&out)?;
+            let task = load_task(&task_path, args.get(2).map(PathBuf::from))?;
+            note(format!("task loaded: {} ({:.1}s)", task_path.display(), start.elapsed().as_secs_f64()));
+            match mode.as_str() {
+                "lab-cairo" => lab::cairo(task, &out, &mut note)?,
+                "lab-bind" => lab::bind(&task, &out, &mut note)?,
+                _ => production(task, &out, &mut note, start)?,
+            }
+            out
+        }
+    };
+    let name = match mode.as_str() {
+        "prod" => "run.txt".to_string(),
+        other => format!("{other}.txt"),
+    };
+    std::fs::write(out.join(name), text)?;
+    Ok(())
+}
 
-    let task: Task = if task_path.extension().is_some_and(|e| e == "zip") {
-        create_pie_task(&task_path).map_err(|e| anyhow::anyhow!("pie: {e}"))?
-    } else {
-        let args_file = args.get(3).map(PathBuf::from);
-        create_cairo1_program_task(&task_path, None, args_file).map_err(|e| anyhow::anyhow!("cairo1 task: {e}"))?
-    };
-    note(format!("task loaded: {} ({:.1}s)", task_path.display(), start.elapsed().as_secs_f64()));
+fn production(task: Task, out: &PathBuf, note: &mut impl FnMut(String), start: Instant) -> Result<()> {
     let precomputes = prepare_recursive_prover_precomputes().map_err(|e| anyhow::anyhow!("{e}"))?;
     note(format!("precomputes ready ({:.1}s)", start.elapsed().as_secs_f64()));
-    let (raw, preimage) = pipeline::prove_task(task, &precomputes, &mut note)?;
+    let (raw, preimage) = pipeline::prove_task(task, &precomputes, note)?;
 
     // Re-wrap exactly as upstream emits the proof, then run upstream's verifier on it.
     let header = ProofHeader {
@@ -64,6 +103,5 @@ fn main() -> Result<()> {
         "sizes: emitted {} bytes, raw recursion proof {} bytes, output preimage {} felts, digest {}",
         output.proof.len(), raw.len(), output.output_preimage.len(), hex::encode(digest.0)
     ));
-    std::fs::write(out.join("run.txt"), log)?;
     Ok(())
 }

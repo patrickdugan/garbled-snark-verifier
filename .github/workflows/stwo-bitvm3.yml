@@ -640,6 +640,32 @@ jobs:
           /usr/bin/time -v timeout --kill-after=5s 900s "$BIN" final-fixture --analytic 2>&1 | tee out/final-fixture.txt
           /usr/bin/time -v timeout --kill-after=5s 900s "$BIN" final --analytic 2>&1 | tee out/final.txt
           /usr/bin/time -v timeout --kill-after=5s 900s "$BIN" cairo --analytic 2>&1 | tee out/cairo.txt
+      - name: Check the committed Shinigami receipts through the Boolean relation (laboratory profile L21)
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=target/release/stwo-bitvm3-s4-cairo
+          (cd fixtures/shinigami && sha256sum -c SHA256SUMS) | tee out/lab-fixtures.txt
+          /usr/bin/time -v timeout --kill-after=5s 600s "$BIN" lab-root 2>&1 | tee out/lab-root.txt
+          /usr/bin/time -v timeout --kill-after=5s 900s "$BIN" final-lab --analytic 2>&1 | tee out/final-lab.txt
+          flag=""
+          for case in csv_valid csv_below_delay hashlock_valid hashlock_wrong_preimage; do
+            /usr/bin/time -v timeout --kill-after=5s 1200s "$BIN" check-lab "fixtures/shinigami/$case/recursion_raw.bin" "fixtures/shinigami/$case/output_preimage.json" $flag 2>&1 | tee "out/check-lab-$case.txt"
+            flag="--light"
+          done
+      - name: Publish compact Shinigami receipt evidence as annotations
+        if: always()
+        working-directory: nova-bitvm3/stark-bitvm3/s4-cairo
+        shell: bash
+        run: |
+          join() { paste -sd'|' | sed 's/|/ | /g'; }
+          echo "::notice title=S4 L21 roots and template::$(grep -hE '^lab-root|program:|boolean' out/lab-root.txt out/final-lab.txt | join)"
+          for case in csv_valid csv_below_delay hashlock_valid hashlock_wrong_preimage; do
+            f="out/check-lab-$case.txt"
+            echo "::notice title=S4 L21 $case statement::$(grep -E '^check: statement:' "$f" | join)"
+            echo "::notice title=S4 L21 $case verdicts::$(grep -E '^check: (native|program|Boolean|mutation|statement (digest|root) bit|witness synthesized|noncanonical|proof mutations)' "$f" | join) | $(grep -E 'Maximum resident|Elapsed' "$f" | sed 's/^\s*//' | join)"
+          done
       - name: Publish compact verifier-circuit evidence as annotations
         if: always()
         working-directory: nova-bitvm3/stark-bitvm3/s4-cairo

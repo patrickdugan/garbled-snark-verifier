@@ -17,21 +17,25 @@ use privacy_prove::consts::{CAIRO_PROVER_PARAMS, CAIRO_RUN_CONFIG};
 use starknet_types_core::felt::Felt;
 use std::{fs::read_to_string, rc::Rc, time::Instant};
 use stwo::core::utils::MaybeOwned;
+use stwo_cairo_adapter::ProverInput;
 use stwo_cairo_adapter::adapter::adapt;
 use stwo_cairo_prover::prover::prove_cairo_with_precompute;
 use tempfile::NamedTempFile;
 
-/// Returns the raw (decompressed) recursion proof bytes and the bootloader output preimage.
-pub fn prove_task(task: Task, pre: &RecursiveProverPrecomputes, log: &mut impl FnMut(String)) -> Result<(Vec<u8>, Vec<Felt>)> {
+/// Runs upstream's privacy bootloader on one task (production run configuration) and adapts the run for
+/// the prover. Returns the prover input and the bootloader output preimage.
+pub fn run_bootloader(task: Task, log: &mut impl FnMut(String)) -> Result<(ProverInput, Vec<Felt>)> {
     let start = Instant::now();
     let preimage_file = NamedTempFile::new()?;
     // The program-hash function is a bootloader input; its cost scales with the program length.
-    let hash = match std::env::var("S4_HASH").as_deref() {
-        Ok("poseidon") => HashFunc::Poseidon,
-        Ok("pedersen") => HashFunc::Pedersen,
-        _ => HashFunc::Blake,
+    let hash_name = std::env::var("S4_HASH").unwrap_or_else(|_| "blake".into());
+    let hash = match hash_name.as_str() {
+        "poseidon" => HashFunc::Poseidon,
+        "pedersen" => HashFunc::Pedersen,
+        "blake" => HashFunc::Blake,
+        other => bail!("unknown program hash function {other}"),
     };
-    log(format!("program hash function: {:?}", std::env::var("S4_HASH").unwrap_or_else(|_| "blake".into())));
+    log(format!("program hash function: {hash_name}"));
     let spec = TaskSpec { task: Rc::new(task), program_hash_function: hash };
     let input = PrivacySimpleBootloaderInput {
         simple_bootloader_input: SimpleBootloaderInput { fact_topologies_path: None, single_page: true, tasks: vec![spec] },
@@ -43,6 +47,7 @@ pub fn prove_task(task: Task, pre: &RecursiveProverPrecomputes, log: &mut impl F
     let preimage: Vec<Felt> = serde_json::from_str(&read_to_string(preimage_file.path())?)?;
     log(format!("bootloader executed, output preimage {} felts ({:.1}s)", preimage.len(), start.elapsed().as_secs_f64()));
     let prover_input = adapt(&runner).map_err(|e| anyhow!("adapt: {e}"))?;
+    drop(runner);
     log(format!("prover input adapted ({:.1}s)", start.elapsed().as_secs_f64()));
     let by = &prover_input.state_transitions.casm_states_by_opcode;
     log(format!(
@@ -61,7 +66,13 @@ pub fn prove_task(task: Task, pre: &RecursiveProverPrecomputes, log: &mut impl F
     if std::env::var("S4_DIMS_ONLY").is_ok() {
         bail!("dimensions printed; proving skipped (S4_DIMS_ONLY)");
     }
+    Ok((prover_input, preimage))
+}
 
+/// Returns the raw (decompressed) recursion proof bytes and the bootloader output preimage.
+pub fn prove_task(task: Task, pre: &RecursiveProverPrecomputes, log: &mut impl FnMut(String)) -> Result<(Vec<u8>, Vec<Felt>)> {
+    let start = Instant::now();
+    let (prover_input, preimage) = run_bootloader(task, log)?;
     let cairo_proof = prove_cairo_with_precompute(
         &pre.base_column_pool,
         &pre.twiddles,

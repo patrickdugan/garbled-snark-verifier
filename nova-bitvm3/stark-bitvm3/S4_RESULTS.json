@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "stage": "S4 Stwo circuit verifier through the Boolean lowering",
+  "stage": "S4 Stwo circuit verifier through the Boolean lowering; Shinigami receipts accepted (laboratory profile L21)",
   "code_commit": "2f67df3",
   "base_head": "67801a9",
   "source_pins": {
@@ -78,6 +78,14 @@
       "and_per_program_word": 142400,
       "projected_and_for_169856_word_program_as_fixed_constants": 38500000000,
       "projection_basis": "slope measured by replacing the 2584-word program with N zero words, plus the base circuit"
+    },
+    "final_1to1_lab_L21": {
+      "equals_production_final_verifier": true,
+      "n_vars": 2961135,
+      "constraints": 1177730,
+      "raw_input_bits": 379025280,
+      "non_free_and": 4783261848,
+      "preprocessed_layout_identical_to_production": true
     }
   },
   "garbling_projection_at_s2_rate": {
@@ -176,13 +184,15 @@
     ]
   },
   "not_established": [
-    "Shinigami proved under the privacy bootloader (does not fit the pinned profiles)",
+    "L21 as a reviewed parameter set (each constant is upstream's; the combination is a laboratory profile)",
     "garbling at this size",
-    "Bitcoin script, dispute protocol, binding of the preprocessed root and output digest on chain",
-    "that the bootloader output digest commits to the Shinigami program hash and output words"
+    "Bitcoin script and dispute protocol",
+    "receipts beyond the S3 pilot (regtest, CSV and SHA256 hashlock, no signatures)",
+    "re-deriving the program hash in CI from a fresh Scarb build",
+    "proof generation in CI (15.4 GB)"
   ],
   "authorization": {
-    "full_shinigami_stark": false,
+    "full_shinigami_stark": "laboratory profile L21 only",
     "bitvm3_dispute_protocol": false,
     "ark_utxoref_state": false
   },
@@ -226,8 +236,248 @@
       "ci": "not run in CI: the prover needs 14.6 GB"
     }
   },
-  "shinigami_under_privacy_bootloader": {
-    "executable": "shinigami_bitvm3_receipt.executable.json, Bootloader entrypoint, 169856 bytecode words, args csv_valid",
+  "shinigami_L21": {
+    "profile_file": "s4-cairo/src/lab_config.rs",
+    "profile": {
+      "cairo_trace_log_size_cap": 21,
+      "cairo_fri": {
+        "log_blowup": 2,
+        "n_queries": 35,
+        "pow_bits": 26,
+        "fold_step": 4
+      },
+      "cairo_lifting_log_size": 23,
+      "components": 46,
+      "components_dropped_from_production": [
+        "pedersen_builtin_narrow_windows",
+        "poseidon_builtin",
+        "pedersen_aggregator_window_bits_9",
+        "partial_ec_mul_window_bits_9",
+        "pedersen_points_table_window_bits_9",
+        "poseidon_aggregator",
+        "poseidon_3_partial_rounds_chain",
+        "poseidon_full_round_chain",
+        "cube_252",
+        "poseidon_round_keys",
+        "range_check_252_width_27"
+      ],
+      "bootloader": "upstream privacy bootloader, 2584 words, Blake program hash",
+      "preprocessed_trace": "canonical small",
+      "interaction_pow_bits": 24,
+      "zk_blinding": 45,
+      "circuit_fri": {
+        "log_blowup": 2,
+        "n_queries": 35,
+        "pow_bits": 26,
+        "fold_step": 4
+      },
+      "circuit_trace_log_size": 21
+    },
+    "pinned_roots": {
+      "cairo_preprocessed_root_words": [
+        3179307202,
+        1157159835,
+        453510509,
+        2593092033,
+        3795335427,
+        2895299845,
+        1780569295,
+        460461011
+      ],
+      "cairo_root_recomputed_from_trace_alone": true,
+      "recomputation_control_reproduces_upstream_table_entry_23": true,
+      "circuit_preprocessed_root_words": [
+        268396719,
+        2599903103,
+        1868538018,
+        1647113170,
+        245116028,
+        3068642296,
+        2008906235,
+        2577474101
+      ],
+      "circuit_root_recomputed_from_profile_alone": true
+    },
+    "program": {
+      "executable_sha256": "a9bdc409d2f7ee443ac62cabdc8df27fb44c85a435ca9350788bee890f61bef3",
+      "equals_s3_pin": true,
+      "words": 169856,
+      "builtins": [
+        "output",
+        "range_check",
+        "bitwise"
+      ],
+      "blake_program_hash": "0x35d865e3a2c16e04032630546acb93f8d1b883cbb6fb688eb4e1afd1dc42f8",
+      "position_in_output_preimage": 2
+    },
+    "bootloader_run": {
+      "steps": 2770649,
+      "memory_cells": 3008238,
+      "blake_compressions": 23017,
+      "component_log_sizes": [
+        19,
+        20,
+        18,
+        14,
+        18,
+        20,
+        15,
+        4,
+        12,
+        13,
+        18,
+        4,
+        4,
+        9,
+        18,
+        15,
+        18,
+        12,
+        14,
+        18,
+        21,
+        4,
+        18,
+        20,
+        12,
+        18,
+        18,
+        16,
+        20,
+        6,
+        8,
+        11,
+        12,
+        18,
+        20,
+        7,
+        8,
+        18,
+        14,
+        18,
+        16,
+        15,
+        8,
+        14,
+        16,
+        18
+      ]
+    },
+    "stages": {
+      "lab_cairo": {
+        "proof_seconds": "22.6 to 25.0",
+        "stage_seconds": "24 to 31",
+        "peak_rss_kib": "15067248 to 15422136",
+        "cairo_proof_bytes_compressed": "about 776000",
+        "native_cairo_verifier_accepted": true
+      },
+      "lab_recurse": {
+        "proof_seconds": "9.1 to 12.4",
+        "stage_seconds": "8 to 14",
+        "peak_rss_kib": "8708640 to 9157140",
+        "raw_recursion_proof_bytes": 263812,
+        "cairo_verifier_circuit_accepted": true,
+        "native_1to1_verifier_accepted": true
+      },
+      "check_lab": {
+        "seconds": "82 to 105",
+        "peak_rss_kib": "1565448 to 1608304",
+        "shards": 589,
+        "threads": 16,
+        "boolean_seconds": "7.5 to 10.3",
+        "shard_summed_non_free_and": 4889964208
+      }
+    },
+    "statement": {
+      "root": "pinned CIRCUIT_PREPROCESSED_ROOT",
+      "digest": "Blake2s of the bootloader output preimage, recomputed by the checker",
+      "preimage_layout": "[1, n + 2, program_hash, n receipt words]",
+      "public_output_words": "Blake2s(leaf circuit hash, digest), computed natively from the statement and pinned in the Boolean program; never read from the witness"
+    },
+    "cases": {
+      "csv_valid": {
+        "profile": "CSV",
+        "accepted": true,
+        "error": null,
+        "txid": "57fd8465879cf2513c7c19be3fdb3994a6c11c4a5218768acba5b2f3e6961c92",
+        "output_digest": "464ef09655f458d4476cb02cc28062b0a066981c7ac14d5ff2ad4b0057250312",
+        "recursion_raw_sha256": "1cc7754db10878e8c4a33ff6621fc7be88a635cbdac60c8b9fe6dde01aaedb25",
+        "public_output_words": [
+          "8023adca",
+          "a7ad7e1c",
+          "a75b2beb",
+          "10ee0682",
+          "5f353c56",
+          "fd4d20ba",
+          "fa6ef686",
+          "9b9736ba"
+        ],
+        "receipt_words": 21
+      },
+      "csv_below_delay": {
+        "profile": "CSV",
+        "accepted": false,
+        "error": "Unsatisfied locktime",
+        "txid": "c1ee8b1c3d287a5fbcdefba3986205999d59073897c7fc67cc05a1865c16c9c7",
+        "output_digest": "937d4a6427b053368fa4d5c9a63ac7a1bf28cd7e3de76f0b5d94369bbb8ed2ee",
+        "recursion_raw_sha256": "b8ebe7e66d754008ff14cbd56862fe52c41221ae382754cc017ec7e7fbaf123c",
+        "receipt_words": 21
+      },
+      "hashlock_valid": {
+        "profile": "SHA256 hashlock",
+        "accepted": true,
+        "error": null,
+        "txid": "6a63aea00e53b4094f5a1e4e9b35903ab9746603fc6332a9b7edbf5e47a06279",
+        "output_digest": "a9d15fce7726b49416a3dffc3e6950a6dbe69c4055c0931fe91b76e688a70fca",
+        "recursion_raw_sha256": "95f93227415a20145c0ddcfdd5b53fba7ec388a3109da91fc0523e2bee7a96bb",
+        "receipt_words": 23
+      },
+      "hashlock_wrong_preimage": {
+        "profile": "SHA256 hashlock",
+        "accepted": false,
+        "error": "Script failed after execute",
+        "txid": "9af07d158cc9895022d07c1cb6b576498b42c820e0ed38921277eb4d62338237",
+        "output_digest": "4c233dbc3acc18726a68cfe3dea89a6fc1d1370a11ceb99bdc501c16b8180c80",
+        "recursion_raw_sha256": "e2aa2c964c8b092024e757ef395e462b9d0e0a66429cf9a45aa40f953e62f988",
+        "receipt_words": 23
+      }
+    },
+    "verdicts_every_case": {
+      "native_cairo_verifier": true,
+      "cairo_verifier_circuit": true,
+      "native_1to1_verifier": true,
+      "final_verifier_native_relation": true,
+      "boolean_relation_accepted": true,
+      "proof_mutations_rejected_native_and_boolean": 6,
+      "statement_digest_bit_flip_rejected": true,
+      "statement_root_bit_flip_rejected": true,
+      "witness_for_other_digest_rejected_native_and_boolean": true,
+      "noncanonical_alias_rejected": true
+    },
+    "cross_checks": {
+      "csv_valid_receipt_equals_standalone_s3_output": true,
+      "csv_valid_txid_equals_sha256d_of_raw_transaction": true
+    },
+    "determinism": "a second full run reproduced all four recursion proofs byte for byte",
+    "fixtures": "s4-cairo/fixtures/shinigami (SHA256SUMS)",
+    "ci": "pending"
+  },
+  "shinigami_production_profile_fit": {
+    "blake": {
+      "steps": 2770649,
+      "memory_cells": 3008238,
+      "result": "exceeds the fixed 2^20 profile (blake_g needs 2^21); 11 production components absent"
+    },
+    "poseidon": {
+      "steps": 1093754,
+      "memory_cells": 1815096,
+      "result": "dimensions only"
+    },
+    "pedersen": {
+      "steps": 1518384,
+      "memory_cells": 2018918,
+      "result": "dimensions only"
+    },
     "standalone": {
       "steps": 157303,
       "max_memory_address": 378312
@@ -235,28 +485,6 @@
     "fixture_pie": {
       "steps": 275860,
       "memory_cells": 328836
-    },
-    "blake": {
-      "steps": 2770649,
-      "memory_cells": 3008238,
-      "f252_values": 36960,
-      "small_values": 790565,
-      "result": "bootloader executed; Cairo prover panicked 'Not enough twiddles!' (trace exceeds the fixed 2^20 profile); peak RSS 16.4 GB at the panic"
-    },
-    "poseidon": {
-      "steps": 1093754,
-      "memory_cells": 1815096,
-      "f252_values": 417462,
-      "result": "dimensions only"
-    },
-    "pedersen": {
-      "steps": 1518384,
-      "memory_cells": 2018918,
-      "f252_values": 181117,
-      "result": "dimensions only"
-    },
-    "small_profile_cap": "CAIRO_TRACE_LOG_SIZE 20, lifting 23, blowup 3, 23 queries",
-    "large_registry": "leaf verifiers for exact trace log sizes 25 to 29 only (blowup 1, 70 queries, canonical preprocessed trace)",
-    "inference_not_observed": "address table rows needed 2^21 (Poseidon) to 2^22 (Blake) versus the 2^20 cap"
+    }
   }
 }

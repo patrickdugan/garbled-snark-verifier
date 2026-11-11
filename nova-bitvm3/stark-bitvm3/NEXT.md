@@ -1,18 +1,18 @@
 # Continuation after S2 and S3a
 
-## S4: the verifier side is sized and exercised
+## S4: a Shinigami statement reaches the Boolean relation
 
-[S4.md](S4.md) and [S4_RESULTS.json](S4_RESULTS.json). The pinned `starkware-libs/proving` circuit verifiers, imported through the S1 lowering, have these exact Boolean sizes: the **production final 1-to-1 verifier is 4,783,261,848 non-free ANDs** (379 million raw input bits, 2.96 million variables, about 76.5 GB of ciphertext at the S2 rate), the fixture-config one 3,338,462,413, and the Cairo verifier circuit 14,693,909,921. Each program word of a fixed program costs about 142 thousand ANDs, so a 169,856-word Shinigami executable cannot be verified as a fixed program (about 38.5 billion ANDs); it has to run as a task under the 2,584-word privacy bootloader and reach the Boolean relation only through the recursion into the final verifier.
+[S4.md](S4.md) and [S4_RESULTS.json](S4_RESULTS.json). The pinned `starkware-libs/proving` circuit verifiers, imported through the S1 lowering, have these exact Boolean sizes: the **production final 1-to-1 verifier is 4,783,261,848 non-free ANDs** (379 million raw input bits, 2.96 million variables, about 76.5 GB of ciphertext at the S2 rate), the fixture-config one 3,338,462,413, and the Cairo verifier circuit 14,693,909,921. A Cairo program is therefore never verified at the Boolean level: it runs as a task of the 2,584-word privacy bootloader and reaches the Boolean relation through the recursion into the final verifier, whose circuit is the same for every program and receipt.
 
-Evidence: upstream's committed production-sized proof (`proof_cairo.bin`, blowup 3) and a freshly generated **production-config** recursion proof (blowup 2, 35 queries; `s4-prove`, 18 s, 14.6 GB peak) are each accepted by the native relation and by the sharded Boolean relation (about 5 to 8 s on 16 threads, 1.5 GB), and six proof mutations plus a non-canonical alias are rejected every time. CI job `s4-verifier-circuit` (`[s4-check]`) reproduces the fixture-config part.
-
-**Measured limit (S4d).** Shinigami as a privacy-bootloader task needs 2,770,649 steps and 3,008,238 memory cells with Blake program hashing (1,093,754 steps and 1,815,096 cells with Poseidon), against 157,303 steps and 378,312 cells standalone, because the bootloader loads and hashes the 169,856-word program. The Cairo prover rejects it at the fixed 2^20-row profile, and the large-proof registry only covers trace log sizes 25 to 29. See [S4.md](S4.md).
+**Shinigami (S4e).** The unmodified 169,856-word Shinigami executable of S3 is proved under the privacy bootloader with laboratory profile L21 (`s4-cairo/src/lab_config.rs`: Cairo trace up to 2^21, blowup 2 with 35 queries, 46 components; everything else is the production privacy profile), recursed, and the final verifier, which is gate for gate the production one, accepts. Four receipts are committed as fixtures (CSV accepted and rejected, SHA256 hashlock accepted and rejected). For each, the native verifiers and the Boolean relation accept, and proof mutations, statement mutations and a non-canonical alias are rejected. The statement is derived by the checker: pinned root (recomputed from the profile), digest recomputed from the bootloader output, pinned Shinigami program hash (recomputed from the executable), and the final verifier's output words computed from the statement, never read from the witness. Proving takes about 40 s and 15.4 GB on this laptop and is deterministic. CI job `s4-verifier-circuit` (`[s4-check]`) checks the committed proofs.
 
 Next, in order:
 
-1. **Make Shinigami fit.** Either shrink the program (a CSV and SHA256 only wrapper does not need the whole engine; the bootloader costs about 6 steps per program word with Poseidon hashing, 16 with Blake) or define a laboratory profile at Cairo trace log 21 with Poseidon hashing and re-measure the Cairo-verifier circuit, the recursion circuit and the final verifier (likely needs 30 GB or more, so a rented machine with a per-session yes). Re-measure; do not scale the counts above.
-2. **Public-statement binding.** The two values the final verifier takes as public (preprocessed root, 8-word output digest) must be what the BitVM3 commitment pins. Establish that the bootloader's output preimage binds the Shinigami program hash and output words.
-3. **Garbling at 3.3 to 4.8 billion ANDs** with a streaming garbler (53 to 77 GB of ciphertext), and the BitVM3 dispute protocol.
+1. **Garble the final verifier.** 4.78 billion non-free ANDs, about 76.5 GB of ciphertext at 16 bytes per gate, with a streaming garbler and a streaming evaluator over the sharded program (the shards already bound memory at 1.6 GB for direct evaluation). Measure time and disk before choosing where to run it; a rented disk needs a per-session yes.
+2. **BitVM3 dispute protocol and Bitcoin script** for the two public values (circuit root, output digest) and the eight output words that follow from them.
+3. **Review L21 as a parameter set.** Each constant is upstream's, the combination is not; either get it reviewed or move to an upstream profile that admits a 2^21 Cairo trace. Shrinking the executable would let the production profile itself carry it: the bootloader run costs 2.61 million steps more than the standalone execution, and that overhead follows the 169,856-word program, not the script being checked.
+4. **Receipt scope.** The receipt is the S3 pilot (regtest, CSV and SHA256 hashlock, no signatures). Widen it only with the corresponding Core-vector evidence.
+5. Keep Nova, SP1 and CUDA proving outside this workstream.
 
 ## S3q: the native Shinigami proof blocker is cleared (laboratory profile)
 
@@ -24,11 +24,7 @@ The flags `native_proof_verified` can now be true for this profile; every applic
 
 ### Next: the verifier side
 
-1. **Matched pair.** The proof format is Stwo-Cairo `467d5c6d` (Scarb 2.18's producer). The Boolean verifier of S2 is pinned to Stwo `e9a38e12`. Decide between porting that verifier to this format (`CairoProofForRustVerifier`) and re-proving with a prover at the S2 revision with the same context correction; measure both.
-2. **Public-memory contract.** The verifier must pin the expected program (the 169,856-word executable hash), the 21 output words, the initial and final state, and the `present` vector of the public segment layout: a prover that chose another vector would produce a different claim. Bind all of it, not only a generic acceptance.
-3. **Input size.** The 47 MB JSON is not the wire format. Measure the binary proof (`CairoProofForRustVerifier`), the number of authenticated input bits and the Boolean gate count of the proof-independent verifier template for this revision before any garbling.
-4. **Profile.** Replace the 96-bit laboratory profile by a reviewed production configuration and rebuild the template for it; do not scale the S2 gate count.
-5. Keep Nova, SP1 and CUDA proving outside this workstream.
+Done in S4 above. The matched-pair question was settled by proving under the S2 revision's own stack (`e9a38e12`), the public-memory contract by the bootloader output preimage and the pinned program hash, and the input size and gate count by the exact template measurements.
 
 The producer default is worth reporting upstream: at `467d5c6d` the adapter (`stwo_cairo_prover/crates/adapter/src/adapter.rs`, line 45) calls `PublicSegmentContext::bootloader_context()` unconditionally, and the prover input Scarb 2.18 wrote for this standalone executable carries that all-present context, so an executable with fewer than eleven builtins gets an unbalanced claim.
 
