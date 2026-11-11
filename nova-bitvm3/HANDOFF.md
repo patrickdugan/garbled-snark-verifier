@@ -22,11 +22,16 @@ A consumer never touches Nova. It receives an SP1 wrap proof and checks it with 
 public values:
 
 ```
-guest A (1,164 bytes): magic "NHC1"|"NHT4" | u32 k | u64 steps | z0 (17 × 32) | zn (17 × 32)
+guest A (1,164 bytes): magic "NHC1"|"NHT4" | u32 k | u32 steps | z0 (17 × 32) | zn (17 × 32)
                        | sha256(compressed vk) | proofs digest
 M16 adds 128 bytes:    "PAY1" | u32 segments | u32 height_B | hash_B | u32 confirmations
                        | txid | u32 vout | u64 value | u32 script length | sha256(script)
 ```
+
+Integers are little-endian; txid and hash_B are in Bitcoin's internal byte order (reversed from
+how explorers show them). The mainnet bytes are
+[`m13/fixtures/m16-public.bin`](m13/fixtures/README.md): k = 1, steps 975,072, then PAY1 with 2
+segments, height 975,067, 6 confirmations, vout 0, 940,000 sats, a 22-byte script.
 
 z0 is the genesis state, so a consumer pins it; zn carries the tip height, tip hash and
 chainwork. A consumer must check: the program vk digest it trusts, magic and k, z0 equal to the
