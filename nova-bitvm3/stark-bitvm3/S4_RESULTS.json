@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "stage": "S4 Stwo circuit verifier through the Boolean lowering",
+  "code_commit": "762cd77",
+  "base_head": "67801a9",
+  "source_pins": {
+    "proving": "e9a38e12d09979f7a8625e233a80fecac6c38f02",
+    "toolchain": "nightly-2026-01-15"
+  },
+  "templates": {
+    "final_1to1_production_recursion_config": {
+      "config": {"log_blowup": 2, "n_queries": 35, "pow_bits": 26, "fold_step": 4, "trace_log_size": 21},
+      "n_vars": 2961135,
+      "constraints": 1177730,
+      "raw_input_bits": 379025280,
+      "non_free_and": 4783261848,
+      "xor": 9214805428,
+      "gates": {"add": 112760, "sub": 114837, "mul": 128016, "pointwise_mul": 43851, "eq": 14546, "triple_xor": 59624, "m31_to_u32": 107777, "blake_g": 596240, "permutation": 70, "output": 9},
+      "permutation_widest": 152,
+      "permutation_total_width": 9310,
+      "monolithic_equals_per_shape_and_count": true
+    },
+    "final_1to1_fixture_config": {
+      "config": {"log_blowup": 3, "n_queries": 23, "pow_bits": 27, "fold_step": 4, "trace_log_size": 21},
+      "n_vars": 2057107,
+      "constraints": 819367,
+      "raw_input_bits": 263309696,
+      "non_free_and": 3338462413,
+      "xor": 6435641823,
+      "gates": {"add": 79324, "sub": 79796, "mul": 89975, "pointwise_mul": 30065, "eq": 9843, "triple_xor": 41384, "m31_to_u32": 75085, "blake_g": 413840, "permutation": 46, "output": 9},
+      "permutation_widest": 152,
+      "permutation_total_width": 6118,
+      "monolithic_equals_per_shape_and_count": true
+    },
+    "cairo_verifier_circuit_privacy_bootloader": {
+      "program_words": 2584,
+      "components": 57,
+      "zk_blinding": 45,
+      "n_vars": 5322183,
+      "constraints": 2488198,
+      "raw_input_bits": 681239424,
+      "non_free_and": 14693909921,
+      "xor": 30134062230,
+      "and_per_program_word": 142400,
+      "projected_and_for_169856_word_program_as_fixed_constants": 38500000000,
+      "projection_basis": "slope measured by replacing the 2584-word program with N zero words, plus the base circuit"
+    }
+  },
+  "garbling_projection_at_s2_rate": {
+    "bytes_per_non_free_and": 16,
+    "source": "S2: 2,265,239,728 bytes / 141,577,483 gates",
+    "production_final_verifier_bytes": 76532189568,
+    "fixture_config_final_verifier_bytes": 53415398608
+  },
+  "evidence": {
+    "proof": "test_data/multiverifier/proof_cairo.bin of starkware-libs/proving at the pin, 182900 bytes, padded privacy Cairo-verifier circuit",
+    "config_source": "circuit_prover::test_utils constants (PCS_CONFIG, preprocessed layout, preprocessed root, output digest), not read from the proof",
+    "native_relation_accepted": true,
+    "proof_circuit_equals_template": true,
+    "program": {"n_vars": 2057107, "constraints": 819367, "public_output_pins": 8},
+    "boolean_relation": {"accepted": true, "shards": 410, "shard_size_constraints": 2000, "threads": 16, "shard_summed_non_free_and": 3412801060, "boolean_seconds": "4.4 to 6.9"},
+    "mutations": {
+      "trace_at_oods[0]+1": {"native_accepts": false, "boolean_accepts": false},
+      "claimed_sums[0]+1": {"native_accepts": false, "boolean_accepts": false},
+      "fri_last_layer_coef+1": {"native_accepts": false, "boolean_accepts": false},
+      "oods_pow_nonce+1": {"native_accepts": false, "boolean_accepts": false},
+      "fri_witness_first+1": {"native_accepts": false, "boolean_accepts": false},
+      "channel_salt+1": {"native_accepts": false, "boolean_accepts": false}
+    },
+    "noncanonical_zero_alias_rejected": true,
+    "local": {"environment": "WSL Ubuntu-24.04, 20 threads", "wall_seconds": "36.1 to 44.1", "peak_rss_kib": 1478620},
+    "unit_test": "shard::tests::sharding_never_changes_the_verdict (1 passed)"
+  },
+  "negative_result": {
+    "file": "test_data/privacy/recursion_proof.bin",
+    "bytes": 43300,
+    "finding": "recursion proof under FriParams::test_params(); deserializing with the production proof configuration fails with ValueOutOfRange, and its root is not the production recursion root; not usable as production evidence"
+  },
+  "ci": {
+    "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42946737257",
+    "commit": "762cd77",
+    "job": "s4-verifier-circuit",
+    "marker": "[s4-check]",
+    "result": "success",
+    "check": {"native_relation_accepted": true, "boolean_relation_accepted": true, "threads": 4, "shards": 410, "boolean_seconds": 11.6, "wall_seconds": 91.6, "peak_rss_kib": 633320, "mutations_rejected": 6, "noncanonical_alias_rejected": true},
+    "templates_match_local_exactly": true,
+    "unit_tests": "1 passed",
+    "artifact": "stwo-s4-verifier-circuit-762cd77aedf312fd3681abe50be673446d3fc7b3",
+    "artifact_zip_digest": "sha256:b04e2811fe0daec73e2dbdb9355db99f9f4696d21c953bb7c73e810c75de23b7"
+  },
+  "not_established": [
+    "Shinigami proved under the privacy bootloader",
+    "a real proof under the production recursion config (blowup 2, 35 queries) through the Boolean relation",
+    "garbling at this size",
+    "Bitcoin script, dispute protocol, binding of the preprocessed root and output digest on chain"
+  ],
+  "authorization": {
+    "full_shinigami_stark": false,
+    "bitvm3_dispute_protocol": false,
+    "ark_utxoref_state": false
+  }
+}
