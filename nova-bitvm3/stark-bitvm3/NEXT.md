@@ -4,14 +4,15 @@
 
 [S4.md](S4.md) and [S4_RESULTS.json](S4_RESULTS.json). The pinned `starkware-libs/proving` circuit verifiers, imported through the S1 lowering, have these exact Boolean sizes: the **production final 1-to-1 verifier is 4,783,261,848 non-free ANDs** (379 million raw input bits, 2.96 million variables, about 76.5 GB of ciphertext at the S2 rate), the fixture-config one 3,338,462,413, and the Cairo verifier circuit 14,693,909,921. Each program word of a fixed program costs about 142 thousand ANDs, so a 169,856-word Shinigami executable cannot be verified as a fixed program (about 38.5 billion ANDs); it has to run as a task under the 2,584-word privacy bootloader and reach the Boolean relation only through the recursion into the final verifier.
 
-Evidence: upstream's committed production-sized proof (`proof_cairo.bin`, blowup 3, 23 queries, trace log 21) is accepted by the native relation and by the sharded Boolean relation (410 shards, about 5 s on 16 threads, 1.5 GB), and six proof mutations plus a non-canonical alias are rejected. CI job `s4-verifier-circuit` (`[s4-check]`) reproduces it.
+Evidence: upstream's committed production-sized proof (`proof_cairo.bin`, blowup 3) and a freshly generated **production-config** recursion proof (blowup 2, 35 queries; `s4-prove`, 18 s, 14.6 GB peak) are each accepted by the native relation and by the sharded Boolean relation (about 5 to 8 s on 16 threads, 1.5 GB), and six proof mutations plus a non-canonical alias are rejected every time. CI job `s4-verifier-circuit` (`[s4-check]`) reproduces the fixture-config part.
+
+**Measured limit (S4d).** Shinigami as a privacy-bootloader task needs 2,770,649 steps and 3,008,238 memory cells with Blake program hashing (1,093,754 steps and 1,815,096 cells with Poseidon), against 157,303 steps and 378,312 cells standalone, because the bootloader loads and hashes the 169,856-word program. The Cairo prover rejects it at the fixed 2^20-row profile, and the large-proof registry only covers trace log sizes 25 to 29. See [S4.md](S4.md).
 
 Next, in order:
 
-1. **Shinigami under the privacy bootloader.** Run the executable as a bootloader task (`create_cairo1_program_task`), prove it, wrap it with the Cairo-verifier circuit proof, then the 1-to-1 proof. This is the first step that needs more than this laptop; size it with a memory-capped local attempt before renting anything, and get a per-session yes for rented compute.
-2. **A production-config recursion proof** (blowup 2, 35 queries, root `PRIVACY_RECURSION_CIRCUIT_PREPROCESSED_ROOT`) through `check`; the committed `test_data/privacy/recursion_proof.bin` is a test-parameter proof and cannot stand in.
-3. **Public-statement binding.** The two values the final verifier takes as public (preprocessed root, 8-word output digest) must be what the BitVM3 commitment pins. Establish that the bootloader's output digest binds the Shinigami program hash and output words.
-4. **Garbling at 3.3 to 4.8 billion ANDs** with a streaming garbler (53 to 77 GB of ciphertext), and the BitVM3 dispute protocol.
+1. **Make Shinigami fit.** Either shrink the program (a CSV and SHA256 only wrapper does not need the whole engine; the bootloader costs about 6 steps per program word with Poseidon hashing, 16 with Blake) or define a laboratory profile at Cairo trace log 21 with Poseidon hashing and re-measure the Cairo-verifier circuit, the recursion circuit and the final verifier (likely needs 30 GB or more, so a rented machine with a per-session yes). Re-measure; do not scale the counts above.
+2. **Public-statement binding.** The two values the final verifier takes as public (preprocessed root, 8-word output digest) must be what the BitVM3 commitment pins. Establish that the bootloader's output preimage binds the Shinigami program hash and output words.
+3. **Garbling at 3.3 to 4.8 billion ANDs** with a streaming garbler (53 to 77 GB of ciphertext), and the BitVM3 dispute protocol.
 
 ## S3q: the native Shinigami proof blocker is cleared (laboratory profile)
 

@@ -6,11 +6,8 @@ mod evidence;
 mod shard;
 use anyhow::{bail, Context as _, Result};
 use circuit_cairo_verifier::verify::build_cairo_verifier_circuit;
-use circuit_verifier::multiverifier::{build_multiverifier_circuit, shared_config, CircuitVerifierInput};
-use circuits::{blake::HashValue, context::FinalizedContext, ivalue::NoValue};
-use circuits_stark_verifier::proof::empty_proof;
-use privacy_circuit_verify::{get_cairo_verifier_config, get_recursive_circuit_config};
-use privacy_common::consts::PRIVACY_RECURSION_CIRCUIT_PREPROCESSED_ROOT;
+use circuits::{context::FinalizedContext, ivalue::NoValue};
+use privacy_circuit_verify::get_cairo_verifier_config;
 use std::time::Instant;
 use stwo_bitvm3_lowering::{Limits, Program};
 use stwo_bitvm3_upstream::import_finalized;
@@ -50,15 +47,7 @@ fn report(name: &str, template: &FinalizedContext<NoValue>, with_boolean: bool, 
 }
 
 fn final_verifier_template() -> Result<FinalizedContext<NoValue>> {
-    let circuit_config = get_recursive_circuit_config(&PRIVACY_RECURSION_CIRCUIT_PREPROCESSED_ROOT)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-    let shared = shared_config(circuit_config.preprocessed_column_log_sizes, circuit_config.config);
-    let input = CircuitVerifierInput::<NoValue> {
-        proof: empty_proof(&shared.proof_config),
-        preprocessed_root: HashValue::no_value(),
-        output_digest: HashValue::no_value(),
-    };
-    Ok(build_multiverifier_circuit::<NoValue>(vec![input], &shared))
+    Ok(evidence::template(&evidence::production_shared()?))
 }
 
 fn main() -> Result<()> {
@@ -83,23 +72,27 @@ fn main() -> Result<()> {
             report("cairo", &build_cairo_verifier_circuit(&config), boolean, analytic)
         }
         Some("final-fixture") => report("final-1to1-fixture-config", &evidence::fixture_template(), boolean, analytic),
-        Some("check") => check(std::path::Path::new(args.get(2).context("fixture directory")?)),
-        _ => bail!("usage: s4 final|cairo [--boolean] [--analytic] | check FIXTURE_DIR"),
+        Some("check") => check(evidence::load_fixture(std::path::Path::new(args.get(2).context("fixture directory")?))?),
+        Some("check-prod") => check(evidence::load_production(
+            std::path::Path::new(args.get(2).context("recursion_raw.bin")?),
+            &std::fs::read_to_string(args.get(3).context("output_digest.hex")?)?,
+        )?),
+        _ => bail!("usage: s4 final|cairo [--boolean] [--analytic] | final-fixture | check FIXTURE_DIR | check-prod RAW DIGEST_FILE"),
     }
 }
 
-/// Native acceptance, Boolean acceptance and mutation rejection for upstream's committed proof of the privacy Cairo-verifier circuit.
-fn check(dir: &std::path::Path) -> Result<()> {
+/// Native acceptance, Boolean acceptance and mutation rejection for a proof of the privacy Cairo-verifier circuit.
+fn check(fixture: evidence::Fixture) -> Result<()> {
     use circuits_stark_verifier::proof::Proof;
     use stwo::core::fields::qm31::QM31;
     let start = Instant::now();
     let one = QM31::from_u32_unchecked(1, 0, 0, 0);
-    let fixture = evidence::load(dir)?;
+    println!("check: proof under test: {}", fixture.label);
     let valid = evidence::context(&fixture, &fixture.proof);
-    anyhow::ensure!(valid.is_circuit_valid(), "the native relation rejected the committed proof");
-    println!("check: native relation accepted the committed production-sized proof_cairo.bin ({:.1}s)", start.elapsed().as_secs_f64());
+    anyhow::ensure!(valid.is_circuit_valid(), "the native relation rejected the proof");
+    println!("check: native relation accepted the proof ({:.1}s)", start.elapsed().as_secs_f64());
 
-    let template = evidence::fixture_template();
+    let template = evidence::template(&fixture.shared);
     anyhow::ensure!(valid.circuit() == template.circuit(), "the proof-bearing circuit differs from the template");
     let good = evidence::values(&valid);
     let pins: Vec<(usize, [u32; 4])> =
@@ -120,7 +113,7 @@ fn check(dir: &std::path::Path) -> Result<()> {
         "check: Boolean relation accepted={ok} over {shards} shards on {threads} threads, summed non-free ANDs {ands} ({:.1}s)",
         start.elapsed().as_secs_f64()
     );
-    anyhow::ensure!(ok, "the Boolean relation rejected the committed proof");
+    anyhow::ensure!(ok, "the Boolean relation rejected the proof");
 
     // Mutations: every internal value is re-derived for the changed proof against the same trusted template.
     let mut cases: Vec<(&str, Proof<QM31>)> = Vec::new();
