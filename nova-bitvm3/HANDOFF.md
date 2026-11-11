@@ -64,7 +64,10 @@ Repo `patrickdugan/zk-rusto-no-bitcoino`, path `integrations/bitvm3-nova`. Mirro
 pin table next to NHT4, and add a CI job that builds the M16 ELF and checks its hash. Done when
 the mirror builds in CI and the pin test passes.
 
-Status: pin and CI job done; the ELF hash check fails and needs a decision.
+Status: done. zk-rusto CI run 42967652190 (af81128) rebuilds the M16 guest and passes: the rebuilt
+ELF and the committed `m16/m16.elf` equal `bb7d51b0…` and program key `dfc68a5d…`. The ELF depends
+on the absolute build paths; the job builds as root at the proven build's paths
+(`m16/README.md`, "Rebuilding the ELF"). The history below is the path to that fix.
 - Mainnet (NHC1) k = 1 pinned in `m12/native/src/pins.rs` (`M12_PINNED_KEYS`; the upstream table at
   de607d3 held only mainnet k = 10 and testnet4 k = 5, 10). New `m12/native/tests/pins.rs`: accepted for
   mainnet k = 1, refused for testnet4 and for k = 2, 5, 10, 20, and other keys refused for mainnet k = 1.
@@ -88,12 +91,22 @@ in Rust, verified with `m13-verify` as a library, and regtest scenarios: accepte
 script, too few confirmations, wrong genesis, tampered proof. Done when the new scenarios run in
 the existing regtest harness alongside the 12 current ones.
 
+Status: done on the real M16 mainnet proof. 20 WSL scenarios pass, including the five that
+waited for the proof; `research/keyagentnet-distributed-v01` at 85ee688, CI green.
+
 ### 3. TradeLayer-Rust: deposit proofs
 TradeLayer-Rust's deposit path. Use the PAY1 record as an attestation that a deposit output
 exists with a given script hash and value, consumed by the listener, so a light client can
 credit a deposit without a full node. Design note first (where the statement enters consensus,
 replay protection by txid:vout), then the parser, then tests. Bitcoin first; keep the Litecoin
 path separate.
+
+Status: design note, parser and tests on TradeLayer-Rust main (8295873, 40fbaeb; Rust CI run
+42962510342 green).
+`docs/ZK_DEPOSIT_PROOFS.md` puts the attestation in the listener now (off consensus) and names a
+payment-inclusion step proved in Nova, checked by the existing type-36 verifier, as the consensus
+route; an in-crate SP1 wrap verifier is rejected (1.1 MB proof against a 128 KiB frame, a port
+4–6 times the Nova verifier). `src/zk_deposit.rs` with 16 tests on the real public values.
 
 ### 4. blossom-storage-bonds: bond settlement on a proven payment
 Repo `patrickdugan/blossom-storage-bonds` (public). Phase 6 used risc0-to-bitvm2's header
@@ -102,11 +115,21 @@ chain. Add a variant that uses the M16 statement for
 both pins checked. Done when `full-stack.ts` can run with the M16 verifier in place of the
 risc0 term guest on regtest-shaped fixtures.
 
+Status: done on `phase-7c-testnet4` (991312b, CI run 42954923990 green). `checkProviderPaid` in
+`layer1/nova-term.ts` with the M16 key, mainnet Nova key and z0 pinned; 11 tests pass against
+the real m13-verify. CI has no m13-verify, so its full-stack M16 leg checks the statement
+fields with the wrap check skipped.
+
 ### 5. vtxo-exit-proof: confirmed exit
 Repo `patrickdugan/vtxo-exit-proof` (public, with CI). Prove that an Ark VTXO's exit transaction
 confirmed: the M16 record's txid equals the last exit-chain transaction, with n confirmations.
 Compose by checking both statements in one verifier (or by recursion in SP1 if cheaper; measure
 both). Done when the composed check is tested against a regtest exit.
+
+Status: `tools/confirmed_exit.py` on main (d230376, CI run 42954845211 green); 17 offline tests
+on PAY1 records built from the six bark exit chains, plus the real mainnet wrap verified and
+refused for every bark VTXO (txid mismatch). bark's vectors are on no chain, so no real exit is
+confirmed yet. SP1 recursion of the Stwo verifier was not measured.
 
 ### 6. Litecoin analogue
 The Nova step circuit hashes SHA-256d; Litecoin's proof of work is Scrypt, which is far too
