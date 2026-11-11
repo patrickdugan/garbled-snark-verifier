@@ -2,7 +2,7 @@
 
 ## S6: the final verifier as a function of the proof
 
-The verifier circuit is read as a computation whose inputs are the statement and the proof: 2,375,891 input bits instead of 379,025,280, and 1,720,551,518 non-free ANDs instead of 4,783,261,848, with the statement as input so that one garbling serves every statement. On the Shinigami proof it reproduces all 2,860,426 computed variables of upstream's witness; garbled (27.5 GB as a stream, about 20 minutes on a laptop) it yields the accept label for the honest proof and the reject label for a changed one. Authenticating 2.4 million input labels on Bitcoin remains unsolved. See [S6.md](S6.md) and [S6_RESULTS.json](S6_RESULTS.json).
+The verifier circuit is read as a computation whose inputs are the statement and the proof: 2,375,891 input bits instead of 379,025,280, and 1,720,551,518 non-free ANDs instead of 4,783,261,848, with the statement as input so that one garbling serves every statement. On the Shinigami proof it reproduces all 2,860,426 computed variables of upstream's witness; garbled (27.5 GB as a stream, 7 minutes on a hosted 4-thread runner) it yields the accept label for the honest proof and the reject label for a changed one. Authenticating 2.4 million input labels on Bitcoin remains unsolved. See [S6.md](S6.md) and [S6_RESULTS.json](S6_RESULTS.json).
 
 ## S5: the whole final verifier garbled and evaluated on a Shinigami proof
 

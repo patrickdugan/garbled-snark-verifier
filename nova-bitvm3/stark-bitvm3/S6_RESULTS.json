@@ -150,7 +150,13 @@
         3337300,
         3050844
       ],
-      "threads": 16
+      "threads": 16,
+      "local_four_threads": {
+        "seconds": 2285.4,
+        "user_seconds": 9430.79,
+        "peak_rss_kib": 2159544,
+        "same_commitment": true
+      }
     },
     "other_plans_same_ciphertext_count": {
       "consecutive_chunks_759_pieces": {
@@ -171,7 +177,54 @@
     "statement_labels_bytes": 8192,
     "conclusion": "per-bit opening of the proof labels on Bitcoin is not practical; the statement alone is; label delivery for the proof needs a data-availability assumption, a forced-publication game or a succinct wrapper"
   },
-  "ci": "pending",
+  "ci": {
+    "run_url": "https://github.com/patrickdugan/garbled-snark-verifier/actions/runs/42994147792",
+    "commit": "d698073",
+    "result": "success",
+    "jobs": {
+      "components": "success",
+      "upstream-conformance": "success",
+      "tiny-garbling": "success",
+      "s4-verifier-circuit": "success (7m 19s)",
+      "s5-garble": "success (24m 28s)"
+    },
+    "final_func": {
+      "input_bits": 2375891,
+      "non_free_and": 1720551518,
+      "pieces": 3617,
+      "seconds": 7.6,
+      "peak_rss_kib": 546512
+    },
+    "check_func_lab_light_csv_valid": {
+      "accepted": true,
+      "computed_variables_compared": 2860426,
+      "mismatches": 0,
+      "mutation_rejected": true,
+      "statement_bits_rejected": true,
+      "noncanonical_rejected": true,
+      "seconds": 36.9,
+      "peak_rss_kib": 984896
+    },
+    "garble_func_lab_csv_valid": {
+      "threads": 4,
+      "pieces": 3618,
+      "ciphertexts": 1720551518,
+      "commitment_blake3": "237b36d4214f5a1b141950da915f1f998b27fcd4427e85ae2de691dbfdbba2f0",
+      "commitment_equals_local": true,
+      "handed_on_wire_labels_checked": 71056672,
+      "mismatches": 0,
+      "honest_accept_label": true,
+      "mutated_reject_label": true,
+      "seconds": 416.5,
+      "peak_rss_kib": 2323428
+    },
+    "s5_relation_garbling_commitment_reproduced": "517d4e1ab80706b5d3a8d8b1e99126611dc225dd50d9a35b40912c46f9d28621",
+    "unit_tests_with_feature": "6 passed",
+    "artifacts": {
+      "stwo-s5-garble-d698073d7c3c6e94f1da4d0329824370ec7248de": "sha256:fe669c8e270c33e0b8c9683676c61a9824dc9650db2c736c8f2359754f044fc5",
+      "stwo-s4-verifier-circuit-d698073d7c3c6e94f1da4d0329824370ec7248de": "sha256:ec927ec9d2efc3f6db4bb2bbd6cb90a471e33ed875299dc6cebc8d9adf177b1e"
+    }
+  },
   "not_established": [
     "authenticated delivery of the 2,375,379 proof input labels",
     "Bitcoin script, transactions or a dispute game",
@@ -182,5 +235,6 @@
     "full_shinigami_stark": "laboratory profile L21 only",
     "bitvm3_dispute_protocol": false,
     "ark_utxoref_state": false
-  }
+  },
+  "code_commit": "d698073"
 }

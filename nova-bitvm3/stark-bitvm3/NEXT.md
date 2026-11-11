@@ -2,14 +2,14 @@
 
 ## S6: the final verifier as a function of the proof
 
-[S6.md](S6.md) and [S6_RESULTS.json](S6_RESULTS.json). The circuit is now read as a computation: its inputs are the 100,361 values upstream guesses, typed by the gates upstream's finalization adds for them, and every other variable is computed. For the production final verifier that is **2,375,891 input bits** (512 of statement, the rest proof and advice) instead of 379,025,280, and **1,720,551,518 non-free ANDs** instead of 4,783,261,848. The statement (digest, root) is input, so one garbling serves every statement. On the Shinigami proof the function computes 2,860,426 variables with no difference from upstream's witness and rejects changed proofs, changed statement bits and non-canonical inputs. Garbled once under one delta (27.5 GB as a stream, 18 to 21 minutes on this laptop) it gives the accept label for the honest proof and the reject label for a changed one, with every wire handed between pieces label-checked.
+[S6.md](S6.md) and [S6_RESULTS.json](S6_RESULTS.json). The circuit is now read as a computation: its inputs are the 100,361 values upstream guesses, typed by the gates upstream's finalization adds for them, and every other variable is computed. For the production final verifier that is **2,375,891 input bits** (512 of statement, the rest proof and advice) instead of 379,025,280, and **1,720,551,518 non-free ANDs** instead of 4,783,261,848. The statement (digest, root) is input, so one garbling serves every statement. On the Shinigami proof the function computes 2,860,426 variables with no difference from upstream's witness and rejects changed proofs, changed statement bits and non-canonical inputs. Garbled once under one delta (27.5 GB as a stream, 7 minutes on a hosted 4-thread runner) it gives the accept label for the honest proof and the reject label for a changed one, with every wire handed between pieces label-checked.
 
 Next, in order:
 
 1. **Authenticated input.** 2,375,379 proof bits cannot be opened label by label on Bitcoin (38 MB of labels alone). Decide between opening only the 512 statement labels with an explicit data-availability rule for the proof labels, a succinct wrapper in front (the Nova and SP1 workstream), or a smaller proof; S6.md lays out the three. This is the main open problem of a direct STARK verifier.
 2. **Garbling correctness toward the counterparty** (cut-and-choose over pieces or another verifiable-garbling approach), using the per-piece commitments that already exist.
 3. **Bitcoin script and the dispute game** over the output label, the statement labels and the ciphertext commitment.
-4. **Throughput.** Sixteen threads use three times the processor time of one on the function-form garbling; the plan bounds the speed-up at nine. Profile before changing the plan again.
+4. **Throughput.** A hosted 4-thread runner garbles and evaluates the function form in 417 s; this laptop under WSL needs 18 to 38 minutes and three times the processor time of the single-chain plan. Profile the per-piece cost there before changing the plan again.
 5. **Review L21 as a parameter set**, or shrink the executable so the production profile carries it.
 6. **Receipt scope**: the receipt is the S3 pilot (regtest, CSV and SHA256 hashlock, no signatures).
 7. Keep Nova, SP1 and CUDA proving outside this workstream.
