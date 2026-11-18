@@ -78,8 +78,25 @@ pub struct GarbleMode<H: hashers::GateHasher, CTH: CiphertextHandler> {
 
 impl<H: hashers::GateHasher, CTH: CiphertextHandler> GarbleMode<H, CTH> {
     /// Create a new GarbleMode. The gate hasher is derived from the RNG seeded by `seed`.
+    ///
+    /// This compatibility constructor has at most 64 bits of seed entropy. Use
+    /// [`Self::new_with_seed`] with a cryptographically random seed for new instances.
     pub fn new(capacity: usize, seed: u64, output_handler: CTH) -> Self {
-        let mut rng = ChaChaRng::seed_from_u64(seed);
+        Self::with_rng(capacity, ChaChaRng::seed_from_u64(seed), output_handler)
+    }
+
+    /// Create a GarbleMode from a full 256-bit ChaCha seed.
+    ///
+    /// Generate `seed` with a cryptographically secure RNG and keep it secret: it
+    /// determines the Free-XOR delta and both labels of every input wire. The public
+    /// gate-hasher parameters can be exported with [`Self::gate_hasher_seed`].
+    /// Reusing a seed reproduces the instance and is intended only for regeneration
+    /// within the same protocol session.
+    pub fn new_with_seed(capacity: usize, seed: [u8; 32], output_handler: CTH) -> Self {
+        Self::with_rng(capacity, ChaChaRng::from_seed(seed), output_handler)
+    }
+
+    fn with_rng(capacity: usize, mut rng: ChaChaRng, output_handler: CTH) -> Self {
         let gate_hasher = H::from_rng(&mut rng);
         let delta = Delta::generate(&mut rng);
 
