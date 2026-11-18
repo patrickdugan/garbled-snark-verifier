@@ -96,8 +96,8 @@ lto = "fat"
 panic = "abort"
 
 [package.metadata.cargo-udeps.ignore]
-development = ["cargo-husky", "bitcoin", "bitcoin-script", "bitvm"]
-normal = ["aes"]
+development = ["cargo-husky", "bitcoin", "bitcoin-script", "bitvm", "k256"]
+normal = ["aes", "num_cpus"]
 
 [profile.release]
 lto = "thin"

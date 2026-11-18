@@ -166,7 +166,7 @@ pub fn reduce_wide<C: CircuitContext>(c: &mut C, field: PastaField, input: &[Wir
         let mut inputs = remainder.to_vec();
         inputs.push(input[i]);
         let out: Vec<WireId> = c.with_named_child(
-            key.clone(),
+            key,
             inputs,
             |ctx, wires| {
                 let shifted: Word =
