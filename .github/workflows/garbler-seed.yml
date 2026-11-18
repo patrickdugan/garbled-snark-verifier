@@ -1,0 +1,25 @@
+name: Garbler seed regressions
+on:
+  pull_request:
+    paths:
+      - 'src/circuit/modes/garble_mode.rs'
+      - 'tests/full_entropy_seed.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/garbler-seed.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  full-entropy-seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_BUILD_JOBS: '2'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust 1.90
+        run: rustup toolchain install 1.90.0 --profile minimal
+      - name: Seed entropy and public evaluator boundary
+        run: cargo +1.90.0 test --locked --no-default-features --test full_entropy_seed
