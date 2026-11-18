@@ -72,9 +72,9 @@ jobs:
             ~/.cargo/git
             ~/.sp1
             target
-          key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-sp1-v5.2.2-clippy-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-clippy-
+            ${{ runner.os }}-sp1-v5.2.2-clippy-
 
       - name: Install SP1up CLI
         run: |
@@ -84,7 +84,7 @@ jobs:
       - name: Setup SP1 toolchain
         run: |
           export PATH="$HOME/.sp1/bin:$PATH"
-          sp1up
+          sp1up --version v5.2.2 --token "${{ github.token }}"
           rustc +succinct --version
 
       - name: Build (prime SP1 assets, release)
@@ -130,9 +130,9 @@ jobs:
             ~/.cargo/git
             ~/.sp1
             target
-          key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-sp1-v5.2.2-build-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-
+            ${{ runner.os }}-sp1-v5.2.2-build-
 
       - name: Install SP1up CLI
         run: |
@@ -142,7 +142,7 @@ jobs:
       - name: Setup SP1 toolchain
         run: |
           export PATH="$HOME/.sp1/bin:$PATH"
-          sp1up
+          sp1up --version v5.2.2 --token "${{ github.token }}"
           rustc +succinct --version
 
       - name: Build
