@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'src/circuit/modes/garble_mode.rs'
+      - 'src/core/delta.rs'
       - 'tests/full_entropy_seed.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'

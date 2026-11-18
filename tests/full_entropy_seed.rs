@@ -1,12 +1,12 @@
 //! Small CPU-only regressions for seed entropy and the public evaluator boundary.
 use garbled_snark_verifier::{
-    AesCcrGateHasher, EvaluatedWire, GarbleMode, GarbledWire, Gate, GateHasher, S, WireId,
+    AesCcrGateHasher, Delta, EvaluatedWire, GarbleMode, GarbledWire, Gate, GateHasher, S, WireId,
     circuit::{
         CiphertextHandler, CiphertextSource, CircuitBuilder, CircuitContext, CircuitInput,
         CircuitMode, EncodeInput, EvaluateMode, FALSE_WIRE, StreamingResult, TRUE_WIRE,
     },
 };
-use rand::SeedableRng;
+use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 
 const CAPACITY: usize = 64;
@@ -150,7 +150,7 @@ fn every_seed_byte_above_u64_changes_garbling() {
     let (public, baseline) = full_seed(seed);
     let baseline_delta =
         baseline.input_wire_values[0].label0 ^ &baseline.input_wire_values[0].label1;
-    for index in 8..32 {
+    for index in 0..32 {
         let mut changed = seed;
         changed[index] ^= 1;
         let (changed_public, changed_result) = full_seed(changed);
@@ -167,6 +167,63 @@ fn every_seed_byte_above_u64_changes_garbling() {
             "seed byte {index}"
         );
     }
+}
+
+struct ScriptedRng<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+impl RngCore for ScriptedRng<'_> {
+    fn next_u32(&mut self) -> u32 {
+        let mut out = [0u8; 4];
+        self.fill_bytes(&mut out);
+        u32::from_le_bytes(out)
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        let mut out = [0u8; 8];
+        self.fill_bytes(&mut out);
+        u64::from_le_bytes(out)
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        for byte in dest {
+            *byte = self.bytes.get(self.offset).copied().unwrap_or(0);
+            self.offset += 1;
+        }
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        self.fill_bytes(dest);
+        Ok(())
+    }
+}
+
+#[test]
+fn delta_generation_rejects_zero_and_redacts_debug() {
+    let mut scripted = [0u8; 32];
+    scripted[16] = 0x5a;
+    let mut rng = ScriptedRng {
+        bytes: &scripted,
+        offset: 0,
+    };
+    let delta = Delta::generate(&mut rng);
+    assert_eq!(
+        *delta,
+        S::from_le_bytes([0x5a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    );
+    assert_eq!(format!("{delta:?}"), "Delta([REDACTED])");
+}
+
+#[test]
+#[should_panic(expected = "RNG failed to produce a non-zero Free-XOR delta")]
+fn delta_generation_panics_on_all_zero_rng() {
+    let mut rng = ScriptedRng {
+        bytes: &[],
+        offset: 0,
+    };
+    let _ = Delta::generate(&mut rng);
 }
 
 #[test]
