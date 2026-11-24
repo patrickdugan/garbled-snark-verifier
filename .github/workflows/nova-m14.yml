@@ -50,6 +50,10 @@ jobs:
         run: |
           mkdir -p nova-bitvm3/m14/ci
           rustup toolchain install 1.90.0 --profile minimal
+      - name: Statement predicate and public-values digest on the committed proofs' public values
+        run: |
+          set -o pipefail
+          cargo +1.90.0 test --release --locked --manifest-path nova-bitvm3/m14/e2e/Cargo.toml --test statement -- --test-threads=2 --nocapture 2>&1 | tee nova-bitvm3/m14/ci/e2e-statement.txt
       - name: Stages against SP1's own verifier (LogUp-GKR, AIR constraints, zerocheck)
         run: |
           set -o pipefail
