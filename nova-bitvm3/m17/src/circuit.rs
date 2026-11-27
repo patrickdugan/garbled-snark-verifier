@@ -626,6 +626,10 @@ impl StepCircuit<F> for ScriptStep {
     };
     let oc_pre = g(z::OC).add(&counted).add(&ocadd);
     let oc_new = cx.mul(&oc_pre, &V::cu(1).sub(&rbegin));
+    // BIP 342: a tapscript (script id 4) has no opcode limit; its count stays zero.
+    let sid_next = cx.sel(&rbegin, &g(z::SID), &arest);
+    let in_tap = cx.is_zero(&sid_next.addc(-fu(crate::compile::SID_TAPSCRIPT)));
+    let oc_new = cx.mul(&oc_new, &V::cu(1).sub(&in_tap));
     cx.bits(&V::cu(isa::MAX_OPS).sub(&oc_new), 8);
     cx.bits(&V::cu(isa::MAX_STACK).sub(&d_new).sub(&ad_new).sub(&td_new), 10);
 
@@ -834,7 +838,8 @@ pub fn check_cases(cases: &[Case], limit: usize) {
             continue;
           }
         };
-        let mut m = Machine::new(&prog, Ctx { tx: &tx, n_in: c.index, amount: *amount, flags: c.flag_bits });
+        let spent = c.spent();
+        let mut m = Machine::new(&prog, Ctx { tx: &tx, n_in: c.index, amount: *amount, flags: c.flag_bits, spent: &spent, budget: Default::default() });
         loop {
           let zin = m.state();
           let mut w = Wit::default();
@@ -873,7 +878,7 @@ pub fn check_cases(cases: &[Case], limit: usize) {
 
 type E1 = nova_snark::provider::PallasEngine;
 type E2 = nova_snark::provider::VestaEngine;
-type Pp = nova_snark::nova::PublicParams<E1, E2, ScriptStep>;
+pub type Pp = nova_snark::nova::PublicParams<E1, E2, ScriptStep>;
 type Rs = nova_snark::nova::RecursiveSNARK<E1, E2, ScriptStep>;
 type S1 = nova_snark::spartan::snark::RelaxedR1CSSNARK<E1, nova_snark::provider::ipa_pc::EvaluationEngine<E1>>;
 type S2 = nova_snark::spartan::snark::RelaxedR1CSSNARK<E2, nova_snark::provider::ipa_pc::EvaluationEngine<E2>>;
@@ -881,6 +886,53 @@ type S2 = nova_snark::spartan::snark::RelaxedR1CSSNARK<E2, nova_snark::provider:
 pub fn setup() -> Pp {
   use nova_snark::traits::snark::RelaxedR1CSSNARKTrait;
   Pp::setup(&ScriptStep::default(), &*S1::ck_floor(), &*S2::ck_floor()).unwrap()
+}
+
+/// One case folded and verified as the checker does, with Taproot signature checks deferred.
+pub struct Folded {
+  pub z0: State,
+  pub zn: Vec<F>,
+  pub steps: usize,
+  pub claims: Vec<engine::Claim>,
+  pub prog: Program,
+  pub tx: crate::sigcheck::Tx,
+  /// Taproot signatures the claims rely on, in claim order (for the TapSighash/Secq proofs).
+  pub deferred: Vec<engine::TaprootSig>,
+  pub prove_seconds: f64,
+  pub verify_seconds: f64,
+}
+
+/// Folds every step of a valid case, verifies the folded proof from z0 recomputed out of the
+/// compiled program, requires the program consumed with no phase in progress, rejects the step
+/// count off by one, and checks the claims with Taproot signatures deferred.
+pub fn fold_case(pp: &Pp, c: &Case) -> Result<Folded, String> {
+  let Verdict::Valid(tr, prog, tx) = run_case(c, true) else { return Err(format!("{} is not valid natively", c.id)) };
+  let n = tr.wits.len();
+  let t = Instant::now();
+  let steps: Vec<ScriptStep> = tr.wits.iter().map(|w| ScriptStep { w: w.clone() }).collect();
+  let mut rs = Rs::new(pp, &steps[0], &tr.z0).map_err(|e| format!("{e:?}"))?;
+  for s in &steps {
+    rs.prove_step(pp, s).map_err(|e| format!("{e:?}"))?;
+  }
+  let prove_seconds = t.elapsed().as_secs_f64();
+  let t = Instant::now();
+  let z0 = engine::initial_state(&prog);
+  if z0 != tr.z0 {
+    return Err("z0 differs from the compiled program".into());
+  }
+  let zn = rs.verify(pp, n, &z0).map_err(|e| format!("Nova verify: {e:?}"))?;
+  if zn[z::P] != F::ZERO || zn[z::PH] != F::ZERO {
+    return Err("program not consumed or operation in progress".into());
+  }
+  if rs.verify(pp, n + 1, &z0).is_ok() {
+    return Err("step count off by one verified".into());
+  }
+  let (amount, _) = &c.prevouts[c.index];
+  let spent = c.spent();
+  let ctx = Ctx { tx: &tx, n_in: c.index, amount: *amount, flags: c.flag_bits, spent: &spent, budget: Default::default() };
+  let deferred = engine::verify_claims_deferring_taproot(&tr.claims, &prog, &ctx, zn[z::CL]).map_err(|e| e.to_string())?;
+  let verify_seconds = t.elapsed().as_secs_f64();
+  Ok(Folded { z0, zn, steps: n, claims: tr.claims, prog, tx, deferred, prove_seconds, verify_seconds })
 }
 
 /// Proves each named case with Nova, then verifies as the checker would: z0 from the compiled
@@ -908,7 +960,8 @@ pub fn prove_cases(cases: &[Case], ids: &[String]) {
     let zn = rs.verify(&pp, n, &z0).expect("Nova verify");
     assert_eq!(zn[z::P], F::ZERO, "program not consumed");
     assert_eq!(zn[z::PH], F::ZERO, "operation in progress");
-    let ctx = Ctx { tx: &tx, n_in: c.index, amount: *amount, flags: c.flag_bits };
+    let spent = c.spent();
+    let ctx = Ctx { tx: &tx, n_in: c.index, amount: *amount, flags: c.flag_bits, spent: &spent, budget: Default::default() };
     engine::verify_claims(&tr.claims, &prog, &ctx, zn[z::CL]).expect("claims");
     // A wrong step count must not verify.
     let wrong = rs.verify(&pp, n + 1, &z0).is_err();

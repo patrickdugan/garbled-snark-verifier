@@ -8,7 +8,8 @@
 use crate::compile::Program;
 use crate::elem::{enc, fu, hash, is_long, F};
 use crate::isa::{ctrl, iop, kind, phase, Src, MAX_OPS, MAX_STACK, NO_FALSE};
-use crate::sigcheck::{self, Tx};
+use crate::sigcheck::{self, SigVersion, Tx};
+use crate::taproot;
 use ff::Field;
 use ripemd::Ripemd160;
 use sha1::Sha1;
@@ -113,6 +114,10 @@ pub struct Ctx<'a> {
   pub n_in: usize,
   pub amount: i64,
   pub flags: u32,
+  /// Every spent output (amount, scriptPubKey): Taproot signature hashes commit to all of them.
+  pub spent: &'a [(i64, Vec<u8>)],
+  /// Tapscript validation weight left (reset from the program by `Machine::new` and `verify_claims`).
+  pub budget: std::cell::Cell<i64>,
 }
 
 pub fn hash_op(op: u64, x: &[u8]) -> Vec<u8> {
@@ -197,7 +202,13 @@ pub fn check_claim(c: &Claim, prog: &Program, ctx: &Ctx) -> Result<u64, &'static
     Claim::Hash { .. } | Claim::Bool { .. } | Claim::Size { .. } => 0,
     Claim::CheckSig { sig, key, sid, csp } => {
       let (s, sv) = script(*sid);
-      sigcheck::checksig(sig, key, s, *csp as usize, *sv, ctx.flags, ctx.tx, ctx.n_in, ctx.amount)? as u64
+      match sv {
+        SigVersion::Taproot | SigVersion::Tapscript => {
+          let info = prog.tap.as_ref().expect("taproot program");
+          taproot::checksig(sig, key, *sv, *csp, info, &ctx.budget, ctx.flags, ctx.tx, ctx.spent, ctx.n_in)? as u64
+        }
+        _ => sigcheck::checksig(sig, key, s, *csp as usize, *sv, ctx.flags, ctx.tx, ctx.n_in, ctx.amount)? as u64,
+      }
     }
     Claim::Cms { keys, sigs, dummy, sid, csp } => {
       let (s, sv) = script(*sid);
@@ -253,6 +264,7 @@ pub struct Trace {
 
 impl<'a> Machine<'a> {
   pub fn new(prog: &'a Program, ctx: Ctx<'a>) -> Self {
+    ctx.budget.set(prog.tap.as_ref().map_or(0, |t| t.budget));
     Machine {
       commits: prog.commits(),
       prog,
@@ -675,6 +687,10 @@ impl<'a> Machine<'a> {
       }
     }
 
+    if self.sid == crate::compile::SID_TAPSCRIPT {
+      // BIP 342: no opcode limit in tapscript (the circuit zeroes the count the same way).
+      self.oc = 0;
+    }
     if self.oc > MAX_OPS {
       return Err("OP_COUNT");
     }
@@ -713,7 +729,73 @@ pub fn initial_state(prog: &Program) -> State {
 
 /// Verifies the claims a proof's final state accumulated: each against Core's rules, and the
 /// accumulator recomputed from the payloads alone.
+/// A Taproot signature claim whose check is left to an outside proof (the TapSighash and
+/// Secq256k1 BIP-340 folds): the signature, the key, the signature version and the
+/// codeseparator register.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TaprootSig {
+  pub sig: Vec<u8>,
+  pub key: Vec<u8>,
+  pub key_path: bool,
+  pub csp: u64,
+}
+
+/// `verify_claims` with every Taproot signature check deferred: hash, castbool, size and
+/// locktime claims and legacy signatures are checked natively; a Taproot signature claim keeps
+/// the encoding, pubkey-type and validation-weight rules natively and takes its result as
+/// "signature non-empty" (a non-empty signature that fails ends the spend, so in a valid spend
+/// it is valid). Returns the deferred signatures in claim order, each of which the outside
+/// proof must show valid.
+pub fn verify_claims_deferring_taproot(claims: &[Claim], prog: &Program, ctx: &Ctx, acc: F) -> Result<Vec<TaprootSig>, &'static str> {
+  ctx.budget.set(prog.tap.as_ref().map_or(0, |t| t.budget));
+  let mut a = F::ZERO;
+  let mut out = vec![];
+  for c in claims {
+    let r = match c {
+      Claim::CheckSig { sig, key, sid, csp } if matches!(prog.scripts[*sid as usize].1, SigVersion::Taproot | SigVersion::Tapscript) => {
+        let sv = prog.scripts[*sid as usize].1;
+        let key_path = sv == SigVersion::Taproot;
+        if key_path {
+          taproot::sig_hash_type(sig)?;
+          if key.len() != 32 {
+            return Err("SCHNORR_SIG");
+          }
+          out.push(TaprootSig { sig: sig.clone(), key: key.clone(), key_path, csp: *csp });
+          1
+        } else {
+          let success = !sig.is_empty();
+          if success {
+            ctx.budget.set(ctx.budget.get() - taproot::VALIDATION_WEIGHT_PER_SIGOP_PASSED);
+            if ctx.budget.get() < 0 {
+              return Err("TAPSCRIPT_VALIDATION_WEIGHT");
+            }
+          }
+          if key.is_empty() {
+            return Err("PUBKEYTYPE");
+          } else if key.len() == 32 {
+            if success {
+              taproot::sig_hash_type(sig)?;
+              out.push(TaprootSig { sig: sig.clone(), key: key.clone(), key_path, csp: *csp });
+            }
+          } else if ctx.flags & sigcheck::flags::DISCOURAGE_UPGRADABLE_PUBKEYTYPE != 0 {
+            return Err("DISCOURAGE_UPGRADABLE_PUBKEYTYPE");
+          }
+          success as u64
+        }
+      }
+      _ => check_claim(c, prog, ctx)?,
+    };
+    let (k, f) = c.fields(r);
+    a = absorb_claim(a, k, &f);
+  }
+  if a != acc {
+    return Err("CLAIMS_MISMATCH");
+  }
+  Ok(out)
+}
+
 pub fn verify_claims(claims: &[Claim], prog: &Program, ctx: &Ctx, acc: F) -> Result<(), &'static str> {
+  ctx.budget.set(prog.tap.as_ref().map_or(0, |t| t.budget));
   let mut a = F::ZERO;
   for c in claims {
     let r = check_claim(c, prog, ctx)?;

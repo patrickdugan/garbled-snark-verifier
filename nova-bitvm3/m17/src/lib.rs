@@ -6,6 +6,7 @@ pub mod elem;
 pub mod engine;
 pub mod isa;
 pub mod sigcheck;
+pub mod taproot;
 
 use serde::Deserialize;
 
@@ -23,6 +24,13 @@ pub struct Case {
   pub index: usize,
 }
 
+impl Case {
+  /// Every spent output as (amount, scriptPubKey).
+  pub fn spent(&self) -> Vec<(i64, Vec<u8>)> {
+    self.prevouts.iter().map(|(a, s)| (*a, hex::decode(s).unwrap())).collect()
+  }
+}
+
 pub enum Verdict {
   Valid(engine::Trace, compile::Program, sigcheck::Tx),
   Invalid(&'static str),
@@ -37,12 +45,12 @@ pub fn run_case(c: &Case, record: bool) -> Verdict {
   };
   let (amount, spk_hex) = &c.prevouts[c.index];
   let spk = hex::decode(spk_hex).unwrap();
+  let spent = c.spent();
   let prog = match compile::compile(&tx, c.index, &spk, c.flag_bits) {
     Ok(p) => p,
-    Err("UNSUPPORTED_TAPROOT") => return Verdict::Unsupported("TAPROOT"),
     Err(e) => return Verdict::Invalid(e),
   };
-  let ctx = engine::Ctx { tx: &tx, n_in: c.index, amount: *amount, flags: c.flag_bits };
+  let ctx = engine::Ctx { tx: &tx, n_in: c.index, amount: *amount, flags: c.flag_bits, spent: &spent, budget: Default::default() };
   let mut m = engine::Machine::new(&prog, ctx);
   match m.run(record) {
     Ok(t) => {

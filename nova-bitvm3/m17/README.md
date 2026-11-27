@@ -1,7 +1,7 @@
 # M17: Bitcoin Script on Nova (Shinigami's engine as a folding step)
 
 M17 proves that a transaction input's scripts execute successfully under Bitcoin Core's rules. It
-covers legacy scripts, P2SH and witness v0, and folds one machine step per Nova step on the same
+covers legacy scripts, P2SH, witness v0 and Taproot (key path and tapscript), and folds one machine step per Nova step on the same
 curve cycle as the header chain (Pallas/Vesta, IPA). The semantics are those of the Shinigami fork
 (`patrickdugan/shinigami`, branch `taproot-provable`), whose Cairo engine passes Bitcoin Core's
 script vectors. The same vectors, built by that fork's `vectors.py`, test every layer here.
@@ -11,11 +11,29 @@ engine became one fixed step circuit with a small machine behind it:
 
 | Piece | What it does |
 | --- | --- |
-| [`compile.rs`](src/compile.rs) | Turns Core's VerifyScript for one input (scriptSig, scriptPubKey, P2SH redeem script, witness program) into a linear program. Everything Core decides from the scripts and flags alone is decided here: script and push sizes, disabled opcodes, OP_VERIF, parse failures, CONST_SCRIPTCODE, SIGPUSHONLY, witness program shapes, P2SH-witness malleation, MINIMALIF and NOP/CLTV/CSV flag handling. |
+| [`compile.rs`](src/compile.rs) | Turns Core's VerifyScript for one input (scriptSig, scriptPubKey, P2SH redeem script, witness program) into a linear program. Everything Core decides from the scripts and flags alone is decided here: script and push sizes, disabled opcodes, OP_VERIF, parse failures, CONST_SCRIPTCODE, SIGPUSHONLY, witness program shapes, P2SH-witness malleation, MINIMALIF and NOP/CLTV/CSV flag handling. Taproot: annex, control block, the script-path commitment (`Q = P + H_TapTweak(P‖root)·G`), leaf versions, OP_SUCCESS, the initial-stack limits and the validation-weight budget. |
 | [`isa.rs`](src/isa.rs) | 75 instructions (Bitcoin opcodes plus pseudo instructions for the orchestration between scripts) and 14 phase codes for multi-step operations. Each dispatch code has a control row: pops, pushes and their sources, functional units, register updates, claim. |
 | [`engine.rs`](src/engine.rs) | The native machine: Core semantics on real bytes. Each step emits the circuit's witness and the next state vector. |
-| [`circuit.rs`](src/circuit.rs) | The step circuit, 6,808 constraints. |
+| [`circuit.rs`](src/circuit.rs) | The step circuit, 6,812 constraints. |
 | [`sigcheck.rs`](src/sigcheck.rs) | Core's signature rules: legacy and BIP143 sighash, FindAndDelete, DER/low-S/hashtype/pubkey encodings, NULLFAIL, NULLDUMMY, the CHECKMULTISIG loop, CLTV and CSV. |
+| [`taproot.rs`](src/taproot.rs) | BIP 341/342 signature rules: SignatureHashSchnorr (key path and tapscript extension), CheckSchnorrSignature, EvalChecksigTapscript (empty signature, unknown pubkey types, validation weight), VerifyTaprootCommitment, IsOpSuccess. |
+
+### Taproot on the same machine
+
+No new instruction was needed. A key-path spend compiles to `LIT sig; LIT output_key`, then a
+one-opcode script `OP_CHECKSIG` (script id 5, signature version Taproot), then `CLEAN1 CHECKTRUE`.
+A tapscript runs as script id 4 with these compile-time rules: OP_CHECKSIGADD becomes
+`SWAP TOALT CHECKSIG FROMALT ADD`; CHECKMULTISIG(VERIFY) fails when executed; IF/NOTIF are the
+minimal forms (MINIMALIF is consensus); OP_CODESEPARATOR records its opcode position. The claim
+checker applies BIP 342's rules to every CHECKSIG claim of script id 4 or 5. The one circuit
+change: script id 4 keeps the opcode count at zero, since BIP 342 has no 201-opcode limit
+(4 more constraints).
+
+`engine::verify_claims_deferring_taproot` checks every claim natively except the Taproot
+signatures themselves (it still applies their encoding, pubkey-type and validation-weight rules)
+and returns them, so an outside proof (SatsHedgeZero's in-circuit TapSighash and Secq256k1
+BIP-340 folds, `research/lightninger_bitvm3_clearing`) can discharge them. `circuit::fold_case`
+folds and verifies one case that way.
 
 ## The machine
 
@@ -75,9 +93,10 @@ threads. Times are therefore contended.
 
 Bitcoin Core's `script_tests.json` and `script_assets_test.json` give 4,995 checks.
 - 2,756 checks are legacy, P2SH or witness v0 (including the script_assets entries checked
-  without the Taproot flag). The engine agrees with Core on all 2,756 and disagrees on none
-  (`nova-script vectors`).
-- 2,239 are Taproot spends, which this milestone does not cover.
+  without the Taproot flag).
+- 2,239 are Taproot spends (categories applic, sighash, tapscript, siglen, opsuccess, unkver,
+  alwaysvalid, spendpath, compat, compact, sig, output).
+- The engine agrees with Core on all 4,995 and disagrees on none (`nova-script vectors`).
 
 ### Step circuit against the engine
 
@@ -88,17 +107,16 @@ Bitcoin Core's `script_tests.json` and `script_assets_test.json` give 4,995 chec
 For every invalid case that fails at a machine step, it feeds the failing step's witness to the
 circuit. That step must be refused, unless the failure came from a claim check.
 
-| Outcome | Count |
-| --- | ---: |
-| Valid cases | 1,808 |
-| Valid-case steps, each satisfied with the engine's exact next state | 29,121 |
-| Invalid: the circuit refused the failing step | 819 |
-| Invalid: rejected by a claim check (signature encoding, NULLFAIL, locktime) | 72 |
-| Invalid: rejected by the compiler (static rules) | 57 |
-| Taproot, skipped | 2,239 |
+| Outcome | Without Taproot (earlier run) | All 4,995 checks |
+| --- | ---: | ---: |
+| Valid cases | 1,808 | 2,930 |
+| Valid-case steps, each satisfied with the engine's exact next state | 29,121 | 247,785 |
+| Invalid: the circuit refused the failing step | 819 | 1,042 |
+| Invalid: rejected by a claim check (signatures, NULLFAIL, locktime, validation weight) | 72 | 833 |
+| Invalid: rejected by the compiler (static rules) | 57 | 190 |
+| Skipped | 2,239 | 0 |
 
-All 2,756 non-Taproot checks are accounted for, with no failure. The run took 3,330 s with
-19 MB peak memory.
+All 4,995 checks are accounted for, with no failure (5,157 s).
 
 ### Nova proofs
 
@@ -123,6 +141,19 @@ off by one, which must fail.
 - Folding ran at 0.8 to 1.0 s per step with 4 threads.
 - The step count off by one was refused in all ten cases.
 
+Taproot cases (uncontended, setup 1.9 s):
+
+| Case | What | Steps | Claims | Prove | Verify |
+| --- | --- | ---: | ---: | ---: | ---: |
+| script_assets/9/success | applic/keypath | 9 | 0 | 1.54 s | 0.09 s |
+| script_assets/23/success | sighash/keypath_hashtype_2 | 17 | 2 | 2.57 s | 0.08 s |
+| script_assets/11/success | sighash/branched_codesep/right | 26 | 2 | 4.30 s | 0.11 s |
+| script_assets/58/success | siglen/empty_csa (OP_CHECKSIGADD) | 24 | 2 | 4.15 s | 0.11 s |
+| script_assets/1366/success | sig/bitflip | 17 | 2 | 2.84 s | 0.11 s |
+| script_assets/1732/success | sig/key | 17 | 2 | 3.17 s | 0.25 s |
+
+Each verified as the checker (claims included) with the step count off by one refused.
+
 Compressed with Spartan over IPA (`nova-script compress`), script_tests/1059 (P2SH multisig,
 31 steps):
 
@@ -140,11 +171,11 @@ plus `0 PICK` and WITHIN).
   or change the committed state.
 
 Result: 1,955 tampered steps, 1,264 unsatisfied. Every change to a read field was refused.
+On the six Taproot cases above: 910 tampered steps, 591 unsatisfied; every change to a read field
+was refused.
 
 ## Not covered
 
-- Taproot and tapscript: key-path spends, OP_CHECKSIGADD, OP_SUCCESS, the validation weight
-  budget.
 - The checker inside SP1. The claim checker exists natively (`engine::verify_claims`), and the
   SP1 guest that would run it beside the Nova verifier is the next milestone.
 - Compressed proofs inside the existing guest-A pipeline: this circuit has its own verifier key.

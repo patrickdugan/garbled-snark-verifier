@@ -3,7 +3,7 @@
 //! Mirrors `src/script/interpreter.cpp`: IsValidSignatureEncoding, IsLowDERSignature,
 //! IsDefinedHashtypeSignature, CheckSignatureEncoding, CheckPubKeyEncoding, FindAndDelete,
 //! SignatureHash (legacy serializer and BIP143), EvalChecksigPreTapscript, the OP_CHECKMULTISIG
-//! body, CheckLockTime and CheckSequence. No taproot.
+//! body, CheckLockTime and CheckSequence. Taproot and Tapscript signatures are in `taproot.rs`.
 //!
 //! Error strings are Core's ScriptError names. Exception: a CScriptNum failure (overflow or
 //! non-minimal encoding) is reported as "SCRIPTNUM"; Core's EvalScript catches the exception and
@@ -45,6 +45,10 @@ use flags as f;
 pub enum SigVersion {
     Base,
     WitnessV0,
+    /// BIP 341 key path (checked in `taproot.rs`).
+    Taproot,
+    /// BIP 342 script path (checked in `taproot.rs`).
+    Tapscript,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -659,6 +663,7 @@ fn check_ecdsa_signature(
     let sighash = match sv {
         SigVersion::Base => legacy_sighash(tx, n_in, script_code, hash_type),
         SigVersion::WitnessV0 => bip143_sighash(tx, n_in, script_code, amount, hash_type),
+        SigVersion::Taproot | SigVersion::Tapscript => unreachable!("taproot signatures go through taproot.rs"),
     };
     verify_signature(der, pubkey, &sighash)
 }

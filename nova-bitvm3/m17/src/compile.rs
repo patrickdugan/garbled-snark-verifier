@@ -10,6 +10,7 @@
 use crate::elem::{enc, hash, script_num, F};
 use crate::isa::iop;
 use crate::sigcheck::{flags::*, SigVersion, Tx};
+use crate::taproot::{self, TapInfo};
 use sha2::{Digest, Sha256};
 
 fn sha256(b: &[u8]) -> Vec<u8> {
@@ -33,9 +34,17 @@ pub struct Instr {
 pub struct Program {
   pub instrs: Vec<Instr>,
   /// Script id -> (bytes, signature version). 0 scriptSig, 1 scriptPubKey, 2 redeem script,
-  /// 3 witness script (P2WSH) or the implied P2WPKH script.
+  /// 3 witness script (P2WSH) or the implied P2WPKH script, 4 tapscript, 5 the one-opcode
+  /// script (`OP_CHECKSIG`) that checks a Taproot key-path signature.
   pub scripts: Vec<(Vec<u8>, SigVersion)>,
+  /// Taproot spends: annex, tapleaf and validation-weight budget for the signature checks.
+  pub tap: Option<TapInfo>,
 }
+
+/// Script id of a tapscript; the step machine does not count its opcodes (BIP 342 has no
+/// 201-opcode limit).
+pub const SID_TAPSCRIPT: u64 = 4;
+pub const SID_KEYPATH: u64 = 5;
 
 impl Program {
   /// Commitments of every suffix: commits()[i] commits to instrs[i..]; commits()[len] = 0.
@@ -98,6 +107,21 @@ pub fn parse(script: &[u8]) -> Result<Vec<Op>, ()> {
     ops.push(Op { opcode: op, data, end: i });
   }
   Ok(ops)
+}
+
+/// GetScriptOp from offset `i`: the offset after the opcode and its push data, or None when the
+/// push runs past the end.
+pub fn next_op(script: &[u8], i: usize) -> Option<usize> {
+  let op = script[i];
+  let (n, start) = match op {
+    0x4c => (*script.get(i + 1)? as usize, i + 2),
+    0x4d => (u16::from_le_bytes(script.get(i + 1..i + 3)?.try_into().ok()?) as usize, i + 3),
+    0x4e => (u32::from_le_bytes(script.get(i + 1..i + 5)?.try_into().ok()?) as usize, i + 5),
+    n if n < 0x4c => (n as usize, i + 1),
+    _ => (0, i + 1),
+  };
+  let end = start.checked_add(n)?;
+  (end <= script.len()).then_some(end)
 }
 
 pub fn is_push_only(script: &[u8]) -> bool {
@@ -198,14 +222,15 @@ impl Builder {
       self.p.scripts.push((vec![], SigVersion::Base));
     }
     self.p.scripts[sid as usize] = (script.to_vec(), sv);
-    if script.len() > MAX_SCRIPT_SIZE {
+    let tap = sv == SigVersion::Tapscript;
+    if script.len() > MAX_SCRIPT_SIZE && !tap {
       return Err("SCRIPT_SIZE");
     }
     let ops = parse(script).map_err(|_| "BAD_OPCODE")?;
     let f = self.flags;
     let min = f & MINIMALDATA != 0;
     self.emit(iop::BEGIN, vec![], aux(false, false, sid));
-    for o in &ops {
+    for (pos, o) in ops.iter().enumerate() {
       let op = o.opcode;
       if let Some(d) = &o.data {
         if d.len() > MAX_ELEMENT {
@@ -219,6 +244,35 @@ impl Builder {
         return Err("OP_CODESEPARATOR");
       }
       let discourage = f & DISCOURAGE_UPGRADABLE_NOPS != 0;
+      if tap {
+        match op {
+          // OP_CHECKSIGADD: sig n key -> n+CHECKSIG(sig, key), as SWAP TOALT CHECKSIG FROMALT ADD.
+          0xba => {
+            self.emit(iop::SWAP, vec![], 0);
+            self.emit(iop::TOALT, vec![], 0);
+            self.emit(iop::CHECKSIG, vec![], aux(false, min, 0));
+            self.emit(iop::FROMALT, vec![], 0);
+            self.emit(iop::ADD, vec![], aux(false, min, 0));
+            continue;
+          }
+          // CHECKMULTISIG(VERIFY) fail when executed (TAPSCRIPT_CHECKMULTISIG).
+          0xae | 0xaf => {
+            self.emit(iop::FAIL_C, vec![], 0);
+            continue;
+          }
+          // MINIMALIF is consensus in tapscript.
+          0x63 | 0x64 => {
+            self.emit(if op == 0x63 { iop::IF_MIN } else { iop::NOTIF_MIN }, vec![], 0);
+            continue;
+          }
+          // The codeseparator position is the opcode index; the register keeps index + 1.
+          0xab => {
+            self.emit(iop::CODESEP, vec![], aux(false, false, pos as u64 + 1));
+            continue;
+          }
+          _ => {}
+        }
+      }
       let (i, bytes, a) = match op {
         0x00..=0x4e => {
           let d = o.data.clone().unwrap();
@@ -350,7 +404,7 @@ impl Builder {
       self.emit(iop::CHECKTRUE, vec![], 0);
       Ok(())
     } else if version == 1 && program.len() == 32 && !p2sh && f & TAPROOT != 0 {
-      Err("UNSUPPORTED_TAPROOT")
+      self.taproot(program, witness)
     } else if f & DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM != 0 {
       Err("DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM")
     } else {
@@ -359,11 +413,77 @@ impl Builder {
   }
 }
 
+impl Builder {
+  /// VerifyWitnessProgram for witness v1 (BIP 341): key path or script path.
+  fn taproot(&mut self, program: &[u8], witness: &[Vec<u8>]) -> Result<(), &'static str> {
+    let f = self.flags;
+    if witness.is_empty() {
+      return Err("WITNESS_PROGRAM_WITNESS_EMPTY");
+    }
+    let mut stack = witness.to_vec();
+    let annex = if stack.len() >= 2 && stack.last().unwrap().first() == Some(&0x50) { stack.pop() } else { None };
+    if stack.len() == 1 {
+      // Key path: CHECKSIG of the signature by the output key, which must succeed.
+      self.p.tap = Some(TapInfo { annex, tapleaf: None, budget: 0 });
+      self.emit(iop::RESET, vec![], 0);
+      self.emit(iop::LIT, stack[0].clone(), 0);
+      self.emit(iop::LIT, program.to_vec(), 0);
+      self.script(SID_KEYPATH, &[0xac], SigVersion::Taproot)?;
+      self.emit(iop::CLEAN1, vec![], 0);
+      self.emit(iop::CHECKTRUE, vec![], 0);
+      return Ok(());
+    }
+    let control = stack.pop().unwrap();
+    let script = stack.pop().unwrap();
+    if control.len() < taproot::TAPROOT_CONTROL_BASE_SIZE
+      || control.len() > taproot::TAPROOT_CONTROL_BASE_SIZE + taproot::TAPROOT_CONTROL_NODE_SIZE * taproot::TAPROOT_CONTROL_MAX_NODE_COUNT
+      || (control.len() - taproot::TAPROOT_CONTROL_BASE_SIZE) % taproot::TAPROOT_CONTROL_NODE_SIZE != 0
+    {
+      return Err("TAPROOT_WRONG_CONTROL_SIZE");
+    }
+    let leaf_version = control[0] & 0xfe;
+    let leaf = taproot::tapleaf_hash(leaf_version, &script);
+    if !taproot::verify_commitment(&control, program, &leaf) {
+      return Err("WITNESS_PROGRAM_MISMATCH");
+    }
+    if leaf_version != taproot::TAPROOT_LEAF_TAPSCRIPT {
+      return if f & DISCOURAGE_UPGRADABLE_TAPROOT_VERSION != 0 { Err("DISCOURAGE_UPGRADABLE_TAPROOT_VERSION") } else { Ok(()) };
+    }
+    // ExecuteWitnessScript, tapscript: OP_SUCCESS anywhere (before a parse failure) succeeds.
+    let mut i = 0;
+    while i < script.len() {
+      let op = script[i];
+      if taproot::is_op_success(op) {
+        return if f & DISCOURAGE_OP_SUCCESS != 0 { Err("DISCOURAGE_OP_SUCCESS") } else { Ok(()) };
+      }
+      i = next_op(&script, i).ok_or("BAD_OPCODE")?;
+    }
+    if stack.len() > crate::isa::MAX_STACK as usize {
+      return Err("STACK_SIZE");
+    }
+    for e in &stack {
+      if e.len() > MAX_ELEMENT {
+        return Err("PUSH_SIZE");
+      }
+    }
+    let budget = taproot::witness_size(witness) + taproot::VALIDATION_WEIGHT_OFFSET;
+    self.p.tap = Some(TapInfo { annex, tapleaf: Some(leaf), budget });
+    self.emit(iop::RESET, vec![], 0);
+    for e in &stack {
+      self.emit(iop::LIT, e.clone(), 0);
+    }
+    self.script(SID_TAPSCRIPT, &script, SigVersion::Tapscript)?;
+    self.emit(iop::CLEAN1, vec![], 0);
+    self.emit(iop::CHECKTRUE, vec![], 0);
+    Ok(())
+  }
+}
+
 /// VerifyScript for input n_in of tx spending (amount, spk) under flags.
 pub fn compile(tx: &Tx, n_in: usize, spk: &[u8], flags: u32) -> Result<Program, &'static str> {
   let sig = tx.inputs[n_in].script_sig.clone();
   let wit = tx.inputs[n_in].witness.clone();
-  let mut b = Builder { flags, p: Program { instrs: vec![], scripts: vec![] } };
+  let mut b = Builder { flags, p: Program { instrs: vec![], scripts: vec![], tap: None } };
   if flags & SIGPUSHONLY != 0 && !is_push_only(&sig) {
     return Err("SIG_PUSHONLY");
   }
